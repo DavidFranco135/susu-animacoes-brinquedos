@@ -19,7 +19,6 @@ interface Props {
 
 const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) => {
   const [selectedRental, setSelectedRental] = useState<Rental | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [contractImage, setContractImage] = useState<string | null>(null);
 
   const [contractTerms, setContractTerms] = useState(
@@ -31,13 +30,10 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const userStr = localStorage.getItem('susu_user');
-  const user: User | null = userStr ? JSON.parse(userStr) : null;
-
   const Title = type === 'contract' ? 'Contrato de Locação' : 'Recibo de Pagamento';
   const Icon = type === 'contract' ? FileSignature : Receipt;
 
-  // ✅ GERA PDF DO CONTAINER A4 REAL (FORA DO MODAL)
+  // ✅ PDF SEM CORTE (PAGINADO)
   const handleDownloadPDF = async () => {
     const element = document.getElementById('pdf-root');
     if (!element) return;
@@ -45,14 +41,22 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
     const html2pdf = (window as any).html2pdf;
 
     await html2pdf()
-      .set({
-        margin: 15,
-        filename: `${type}-${selectedRental?.customerName}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      })
       .from(element)
+      .set({
+        filename: `${type}-${selectedRental?.customerName}.pdf`,
+        margin: 0,
+        pagebreak: { mode: ['css', 'legacy'] },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          scrollY: 0
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        }
+      })
       .save();
   };
 
@@ -65,54 +69,83 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
     reader.readAsDataURL(file);
   };
 
-  // ✅ CONTEÚDO DO PDF (A4 REAL, SEM LIMITES)
+  // ✅ PDF REAL COM PAGINAÇÃO
   const PdfContent = () => {
     if (!selectedRental) return null;
 
+    const customer =
+      customers.find(c => c.id === selectedRental.customerId);
+
     return (
-      <div
-        id="pdf-root"
-        className="bg-white text-slate-800 font-serif space-y-8 p-12"
-        style={{ width: '210mm', minHeight: '297mm' }}
-      >
-        <div className="text-center space-y-2 border-b pb-6">
-          <h1 className="text-2xl font-black uppercase">{Title}</h1>
-          <p className="text-xs">
-            {company.name} — CNPJ: {company.cnpj}
-          </p>
-          <p className="text-xs">{company.address}</p>
+      <div id="pdf-root" className="bg-white">
+        {/* ===== PÁGINA 1 ===== */}
+        <div
+          className="pdf-page"
+          style={{
+            width: '210mm',
+            minHeight: '297mm',
+            padding: '20mm',
+            boxSizing: 'border-box',
+            pageBreakAfter: 'always'
+          }}
+        >
+          <div className="text-center border-b pb-6 mb-6">
+            <h1 className="text-2xl font-black uppercase">{Title}</h1>
+            <p className="text-xs">{company.name} — CNPJ: {company.cnpj}</p>
+            <p className="text-xs">{company.address}</p>
+          </div>
+
+          <div className="text-sm space-y-2">
+            <p><strong>Cliente:</strong> {selectedRental.customerName}</p>
+            <p>
+              <strong>Documento:</strong>{' '}
+              {customer?.cpf || customer?.cnpj || 'Não informado'}
+            </p>
+            <p>
+              <strong>Endereço do evento:</strong>{' '}
+              {selectedRental.eventAddress || customer?.address}
+            </p>
+          </div>
+
+          <div className="bg-slate-100 p-6 rounded-xl mt-6 text-sm">
+            <p><strong>Valor total:</strong> R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
+            <p><strong>Entrada paga:</strong> R$ {selectedRental.entryValue.toLocaleString('pt-BR')}</p>
+          </div>
+
+          <div className="mt-8 text-sm whitespace-pre-line leading-relaxed">
+            {type === 'contract'
+              ? contractTerms
+              : `Declaramos que recebemos o valor acima referente à locação.`}
+          </div>
         </div>
 
-        <div className="text-sm space-y-2">
-          <p><strong>Cliente:</strong> {selectedRental.customerName}</p>
-          <p>
-            <strong>Documento:</strong>{' '}
-            {customers.find(c => c.id === selectedRental.customerId)?.cpf ||
-              customers.find(c => c.id === selectedRental.customerId)?.cnpj ||
-              'Não informado'}
-          </p>
-          <p><strong>Endereço do evento:</strong> {selectedRental.eventAddress}</p>
-        </div>
+        {/* ===== PÁGINA 2 (SE PRECISAR) ===== */}
+        {(contractImage || contractTerms.length > 800) && (
+          <div
+            className="pdf-page"
+            style={{
+              width: '210mm',
+              minHeight: '297mm',
+              padding: '20mm',
+              boxSizing: 'border-box'
+            }}
+          >
+            {contractImage && (
+              <>
+                <p className="text-xs font-bold uppercase mb-4">Anexo</p>
+                <img
+                  src={contractImage}
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                />
+              </>
+            )}
 
-        <div className="bg-slate-100 p-6 rounded-xl text-sm">
-          <p><strong>Valor total:</strong> R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
-          <p><strong>Entrada paga:</strong> R$ {selectedRental.entryValue.toLocaleString('pt-BR')}</p>
-        </div>
-
-        <div className="text-sm whitespace-pre-line leading-relaxed">
-          {type === 'contract'
-            ? contractTerms
-            : `Declaramos que recebemos o valor acima referente à locação.`}
-        </div>
-
-        {contractImage && (
-          <img src={contractImage} className="w-full rounded-xl border mt-6" />
+            <div className="pt-32 grid grid-cols-2 gap-16 text-center text-xs font-bold uppercase">
+              <div className="border-t pt-2">{company.name}</div>
+              <div className="border-t pt-2">{selectedRental.customerName}</div>
+            </div>
+          </div>
         )}
-
-        <div className="pt-32 grid grid-cols-2 gap-16 text-center text-xs font-bold uppercase">
-          <div className="border-t pt-2">{company.name}</div>
-          <div className="border-t pt-2">{selectedRental.customerName}</div>
-        </div>
       </div>
     );
   };
@@ -162,7 +195,7 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
         </table>
       </div>
 
-      {/* MODAL (APENAS VISUALIZAÇÃO) */}
+      {/* MODAL */}
       {selectedRental && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl">
@@ -171,11 +204,6 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
               <button onClick={() => setSelectedRental(null)}>
                 <X />
               </button>
-            </div>
-
-            <div className="p-6 text-sm">
-              <p><strong>Cliente:</strong> {selectedRental.customerName}</p>
-              <p><strong>Valor:</strong> R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
             </div>
 
             <div className="p-6 border-t flex justify-end">
@@ -190,7 +218,7 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
         </div>
       )}
 
-      {/* 🔒 PDF INVISÍVEL (FORA DO MODAL) */}
+      {/* PDF INVISÍVEL */}
       <div className="hidden">
         <PdfContent />
       </div>
