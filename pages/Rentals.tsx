@@ -127,13 +127,58 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     }
   };
 
-  const handleDownloadReportPDF = () => {
-    const period = viewTab === 'Mês' 
-      ? currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
-      : currentDate.getFullYear();
-    handleDownloadPDF('rentals-report-print', `Relatorio-Reservas-${period}`);
-  };
-
+  const handleDownloadPDF = async (rental: Rental) => {
+  const element = document.getElementById('print-area-rental');
+  if (!element) return;
+  
+  element.classList.remove('hidden');
+  element.style.display = 'block';
+  element.style.position = 'absolute';
+  element.style.left = '-9999px';
+  element.style.width = '210mm';
+  
+  const { jsPDF } = (window as any).jspdf;
+  try {
+    const canvas = await (window as any).html2canvas(element, { 
+      scale: 3,
+      useCORS: true,
+      logging: false,
+      windowWidth: 794,
+      windowHeight: element.scrollHeight
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = 210;
+    const pdfHeight = 297;
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    let heightLeft = imgHeight;
+    let position = 0;
+    
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pdfHeight;
+    
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+    
+    pdf.save(`reserva-${rental.customerName}.pdf`);
+  } catch (err) {
+    console.error("PDF Error:", err);
+    alert("Erro ao gerar a reserva.");
+  } finally {
+    element.style.display = '';
+    element.style.position = '';
+    element.style.left = '';
+    element.style.width = '';
+    element.classList.add('hidden');
+  }
+};
   const handleCompleteEvent = (rental: Rental) => {
     const pending = rental.totalValue - rental.entryValue;
     const msg = pending > 0 
