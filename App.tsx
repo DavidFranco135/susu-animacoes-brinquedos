@@ -32,7 +32,7 @@ import BudgetsPage from './pages/BudgetsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import PublicRentalSummary from './pages/PublicRentalSummary';
 import { Customer, Toy, Rental, User, UserRole, FinancialTransaction, CompanySettings as CompanyType } from './types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, User as UserIcon } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUvwY-e7h0KZyFJv7n0ignpzlMUGJIurU",
@@ -48,7 +48,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const Login: React.FC = () => {
+// Componente de Login agora recebe o logotipo da empresa como prop
+const Login: React.FC<{ companyLogo?: string }> = ({ companyLogo }) => {
   const [email, setEmail] = useState('admsusu@gmail.com');
   const [password, setPassword] = useState('123456');
   const [error, setError] = useState('');
@@ -82,7 +83,13 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100 flex flex-col items-center animate-in fade-in zoom-in duration-500">
         <div className="text-center mb-10 w-full flex flex-col items-center">
           <div className="w-32 h-32 mb-6 flex items-center justify-center overflow-hidden">
-             <img src="logo.png" alt="SUSU Animações" className="w-full h-full object-contain" />
+             {companyLogo ? (
+               <img src={companyLogo} alt="Logo" className="w-full h-full object-contain" />
+             ) : (
+               <div className="w-full h-full bg-slate-100 flex items-center justify-center rounded-3xl">
+                 <UserIcon size={40} className="text-slate-300" />
+               </div>
+             )}
           </div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Painel Administrativo</h2>
           <p className="text-slate-400 mt-1 font-medium text-sm">Controle sua diversão em um só lugar</p>
@@ -123,6 +130,27 @@ const App: React.FC = () => {
     address: 'Rua das Festas, 123, São Paulo - SP',
     contractTerms: 'Termos padrão...'
   });
+
+  // Efeito para sincronizar LOGO do sistema com o Navegador e Celular
+  useEffect(() => {
+    if (company.logoUrl) {
+      // Atualiza Favicon
+      const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement;
+      if (favicon) favicon.href = company.logoUrl;
+      
+      // Atualiza Apple Touch Icon (Mobile)
+      const appleIcon = document.getElementById('dynamic-apple-icon') as HTMLLinkElement;
+      if (appleIcon) appleIcon.href = company.logoUrl;
+    }
+  }, [company.logoUrl]);
+
+  // Carregamento de dados da empresa (PÚBLICO - ANTES DO LOGIN)
+  useEffect(() => {
+    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (docSnap) => {
+      if (docSnap.exists()) setCompany(docSnap.data() as CompanyType);
+    });
+    return () => unsubCompany();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -172,16 +200,12 @@ const App: React.FC = () => {
       setTransactions(snap.docs.map(d => ({ ...d.data(), id: d.id } as FinancialTransaction)));
     });
 
-    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (docSnap) => {
-      if (docSnap.exists()) setCompany(docSnap.data() as CompanyType);
-    });
-
     const unsubCategories = onSnapshot(doc(db, "settings", "categories"), (docSnap) => {
       if (docSnap.exists()) setCategories(docSnap.data().list || []);
     });
 
     return () => {
-      unsubToys(); unsubCustomers(); unsubRentals(); unsubFinancial(); unsubCompany(); unsubCategories();
+      unsubToys(); unsubCustomers(); unsubRentals(); unsubFinancial(); unsubCategories();
     };
   }, [user]);
 
@@ -213,7 +237,7 @@ const App: React.FC = () => {
         <Route path="/resumo/:id" element={<PublicRentalSummary rentals={rentals} toys={toys} company={company} />} />
         
         <Route path="*" element={
-          !user ? <Login /> : (
+          !user ? <Login companyLogo={company.logoUrl} /> : (
             <Layout user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser}>
               <Routes>
                 <Route path="/" element={user.role === UserRole.ADMIN ? <Dashboard rentals={rentals} toysCount={toys.length} transactions={transactions} /> : <Navigate to="/reservas" />} />
