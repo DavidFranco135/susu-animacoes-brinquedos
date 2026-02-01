@@ -24,9 +24,9 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
 
   const [contractTerms, setContractTerms] = useState(
     company.contractTerms ||
-      `1. OBJETO: A CONTRATADA compromete-se a disponibilizar os brinquedos e equipamentos em perfeito estado.
-2. RESPONSABILIDADE: O CONTRATANTE assume inteira responsabilidade por mau uso.
-3. CANCELAMENTO: Desistências com menos de 48h não têm estorno do sinal.`
+      `1. OBJETO: A CONTRATADA compromete-se a disponibilizar os brinquedos.
+2. RESPONSABILIDADE: O CONTRATANTE assume responsabilidade por danos.
+3. CANCELAMENTO: Cancelamentos com menos de 48h não têm estorno.`
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,29 +37,20 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
   const Title = type === 'contract' ? 'Contrato de Locação' : 'Recibo de Pagamento';
   const Icon = type === 'contract' ? FileSignature : Receipt;
 
-  // ✅ PDF PROFISSIONAL (SEM CORTAR)
-  const handleDownloadPDF = async (elementId: string, filename: string) => {
-    const element = document.getElementById(elementId);
+  // ✅ GERA PDF DO CONTAINER A4 REAL (FORA DO MODAL)
+  const handleDownloadPDF = async () => {
+    const element = document.getElementById('pdf-root');
     if (!element) return;
 
     const html2pdf = (window as any).html2pdf;
 
     await html2pdf()
       .set({
-        margin: [15, 15, 15, 15],
-        filename: `${filename}.pdf`,
+        margin: 15,
+        filename: `${type}-${selectedRental?.customerName}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          scrollY: 0
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait'
-        },
-        pagebreak: { mode: ['css', 'legacy'] }
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       })
       .from(element)
       .save();
@@ -74,71 +65,74 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
     reader.readAsDataURL(file);
   };
 
+  // ✅ CONTEÚDO DO PDF (A4 REAL, SEM LIMITES)
+  const PdfContent = () => {
+    if (!selectedRental) return null;
+
+    return (
+      <div
+        id="pdf-root"
+        className="bg-white text-slate-800 font-serif space-y-8 p-12"
+        style={{ width: '210mm', minHeight: '297mm' }}
+      >
+        <div className="text-center space-y-2 border-b pb-6">
+          <h1 className="text-2xl font-black uppercase">{Title}</h1>
+          <p className="text-xs">
+            {company.name} — CNPJ: {company.cnpj}
+          </p>
+          <p className="text-xs">{company.address}</p>
+        </div>
+
+        <div className="text-sm space-y-2">
+          <p><strong>Cliente:</strong> {selectedRental.customerName}</p>
+          <p>
+            <strong>Documento:</strong>{' '}
+            {customers.find(c => c.id === selectedRental.customerId)?.cpf ||
+              customers.find(c => c.id === selectedRental.customerId)?.cnpj ||
+              'Não informado'}
+          </p>
+          <p><strong>Endereço do evento:</strong> {selectedRental.eventAddress}</p>
+        </div>
+
+        <div className="bg-slate-100 p-6 rounded-xl text-sm">
+          <p><strong>Valor total:</strong> R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
+          <p><strong>Entrada paga:</strong> R$ {selectedRental.entryValue.toLocaleString('pt-BR')}</p>
+        </div>
+
+        <div className="text-sm whitespace-pre-line leading-relaxed">
+          {type === 'contract'
+            ? contractTerms
+            : `Declaramos que recebemos o valor acima referente à locação.`}
+        </div>
+
+        {contractImage && (
+          <img src={contractImage} className="w-full rounded-xl border mt-6" />
+        )}
+
+        <div className="pt-32 grid grid-cols-2 gap-16 text-center text-xs font-bold uppercase">
+          <div className="border-t pt-2">{company.name}</div>
+          <div className="border-t pt-2">{selectedRental.customerName}</div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <header className="flex flex-col md:flex-row justify-between md:items-center gap-6 print:hidden">
+      <header className="flex justify-between items-center print:hidden">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg">
+          <div className="p-3 bg-blue-600 text-white rounded-xl">
             <Icon size={24} />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">{Title}s</h1>
-            <p className="text-slate-500">Documentação legal baseada em reservas.</p>
-          </div>
+          <h1 className="text-2xl font-bold">{Title}s</h1>
         </div>
-
-        {type === 'contract' && (
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest ${
-              isEditing
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white border text-slate-600'
-            }`}
-          >
-            {isEditing ? 'Confirmar Termos' : 'Ajustar Cláusulas'}
-          </button>
-        )}
       </header>
 
-      {/* EDIÇÃO */}
-      {isEditing && type === 'contract' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:hidden">
-          <textarea
-            rows={10}
-            className="w-full p-6 border rounded-3xl font-bold text-sm"
-            value={contractTerms}
-            onChange={e => setContractTerms(e.target.value)}
-          />
-
-          <div className="space-y-4">
-            <div className="w-full h-64 border-2 border-dashed rounded-3xl flex items-center justify-center relative">
-              {contractImage ? (
-                <img src={contractImage} className="w-full h-full object-cover" />
-              ) : (
-                <ImageIcon size={48} className="text-slate-300" />
-              )}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0"
-              />
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
-          </div>
-        </div>
-      )}
-
       {/* LISTA */}
-      <div className="bg-white rounded-3xl border print:hidden">
+      <div className="bg-white rounded-xl border print:hidden">
         <table className="w-full">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-400">
+          <thead className="bg-slate-50 text-xs uppercase">
             <tr>
               <th className="p-4">Data</th>
               <th className="p-4">Cliente</th>
@@ -168,62 +162,25 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
         </table>
       </div>
 
-      {/* MODAL DOCUMENTO */}
+      {/* MODAL (APENAS VISUALIZAÇÃO) */}
       {selectedRental && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl">
-            <div className="p-6 border-b flex justify-between print:hidden">
-              <h2 className="font-bold text-xs uppercase">Documento</h2>
+            <div className="p-6 border-b flex justify-between">
+              <h2 className="font-bold text-xs uppercase">Visualização</h2>
               <button onClick={() => setSelectedRental(null)}>
                 <X />
               </button>
             </div>
 
-            {/* ⚠️ SEM overflow / SEM height fixa */}
-            <div
-              id="document-print-area"
-              className="p-12 text-slate-800 space-y-8 font-serif"
-            >
-              <div className="text-center space-y-2">
-                <h1 className="text-2xl font-black uppercase">{Title}</h1>
-                <p className="text-xs">
-                  {company.name} — {company.cnpj}
-                </p>
-              </div>
-
+            <div className="p-6 text-sm">
               <p><strong>Cliente:</strong> {selectedRental.customerName}</p>
-              <p>
-                <strong>Valor:</strong> R${' '}
-                {selectedRental.totalValue.toLocaleString('pt-BR')}
-              </p>
-
-              <div className="whitespace-pre-line text-sm">
-                {type === 'contract'
-                  ? contractTerms
-                  : `Recebemos o valor acima referente à locação.`}
-              </div>
-
-              {contractImage && (
-                <img
-                  src={contractImage}
-                  className="w-full rounded-xl border mt-6"
-                />
-              )}
-
-              <div className="pt-24 grid grid-cols-2 gap-12 text-center text-xs font-bold uppercase">
-                <div className="border-t pt-2">{company.name}</div>
-                <div className="border-t pt-2">{selectedRental.customerName}</div>
-              </div>
+              <p><strong>Valor:</strong> R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
             </div>
 
-            <div className="p-6 border-t flex justify-end print:hidden">
+            <div className="p-6 border-t flex justify-end">
               <button
-                onClick={() =>
-                  handleDownloadPDF(
-                    'document-print-area',
-                    `${type}-${selectedRental.customerName}`
-                  )
-                }
+                onClick={handleDownloadPDF}
                 className="bg-slate-900 text-white px-8 py-4 rounded-xl flex gap-2 items-center font-bold"
               >
                 <Download size={18} /> Baixar PDF
@@ -232,6 +189,11 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
           </div>
         </div>
       )}
+
+      {/* 🔒 PDF INVISÍVEL (FORA DO MODAL) */}
+      <div className="hidden">
+        <PdfContent />
+      </div>
     </div>
   );
 };
