@@ -31,7 +31,7 @@ import BudgetsPage from './pages/BudgetsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import PublicRentalSummary from './pages/PublicRentalSummary';
 import { Customer, Toy, Rental, User, UserRole, FinancialTransaction, CompanySettings as CompanyType } from './types';
-import { Loader2 } from 'lucide-react';
+import { User as UserIcon, Loader2 } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUvwY-e7h0KZyFJv7n0ignpzlMUGJIurU",
@@ -54,13 +54,14 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [displayPhoto, setDisplayPhoto] = useState<string>("https://images.unsplash.com/photo-1530103862676-fa8c91811678?q=80&w=500&auto=format&fit=crop");
 
+  // Busca a foto de perfil salva para exibir no Login
   useEffect(() => {
     const userStr = localStorage.getItem('susu_user');
     if (userStr) {
       try {
         const userData = JSON.parse(userStr);
         if (userData.profilePhotoUrl) setDisplayPhoto(userData.profilePhotoUrl);
-      } catch (e) { console.error(e); }
+      } catch (e) { console.error("Erro ao ler foto do perfil", e); }
     }
   }, []);
 
@@ -68,12 +69,14 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       if ((err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') && email === 'admsusu@gmail.com') {
         try {
           await createUserWithEmailAndPassword(auth, email, password);
+          return;
         } catch (createErr: any) {
           setError('Erro ao criar conta administrativa.');
         }
@@ -89,18 +92,19 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100 flex flex-col items-center">
         <div className="text-center mb-10 w-full flex flex-col items-center">
+          {/* Foto dinâmica: Perfil do usuário ou Fallback de brinquedos */}
           <div className="w-32 h-32 bg-slate-50 rounded-[40px] flex items-center justify-center mb-6 shadow-xl border-4 border-white overflow-hidden relative">
              <img 
                key={displayPhoto}
                src={displayPhoto} 
-               alt="Perfil" 
+               alt="Logo Login" 
                className="w-full h-full object-cover"
                onError={(e) => {
                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1530103862676-fa8c91811678?q=80&w=500&auto=format&fit=crop";
                }}
              />
           </div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest text-center">Painel Administrativo</h2>
+          <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Painel Administrativo</h2>
           <p className="text-slate-400 mt-1 font-medium text-sm">SUSU Animações e Brinquedos</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6 w-full">
@@ -170,36 +174,44 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    const unsubToys = onSnapshot(query(collection(db, "toys"), orderBy("name")), (snap) => {
+
+    onSnapshot(query(collection(db, "toys"), orderBy("name")), (snap) => {
       setToys(snap.docs.map(d => ({ ...d.data(), id: d.id } as Toy)));
     });
-    const unsubCustomers = onSnapshot(query(collection(db, "customers"), orderBy("name")), (snap) => {
+
+    onSnapshot(query(collection(db, "customers"), orderBy("name")), (snap) => {
       setCustomers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
     });
-    const unsubRentals = onSnapshot(query(collection(db, "rentals"), orderBy("date", "desc")), (snap) => {
+
+    onSnapshot(query(collection(db, "rentals"), orderBy("date", "desc")), (snap) => {
       setRentals(snap.docs.map(d => ({ ...d.data(), id: d.id } as Rental)));
     });
-    const unsubFinancial = onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => {
+
+    onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => {
       setTransactions(snap.docs.map(d => ({ ...d.data(), id: d.id } as FinancialTransaction)));
     });
-    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (docSnap) => {
+
+    // Monitora as configurações da empresa (incluindo a logomarca oficial)
+    onSnapshot(doc(db, "settings", "company"), (docSnap) => {
       if (docSnap.exists()) setCompany(docSnap.data() as CompanyType);
     });
-    const unsubCategories = onSnapshot(doc(db, "settings", "categories"), (docSnap) => {
+
+    onSnapshot(doc(db, "settings", "categories"), (docSnap) => {
       if (docSnap.exists()) setCategories(docSnap.data().list || []);
     });
-    return () => {
-      unsubToys(); unsubCustomers(); unsubRentals(); unsubFinancial(); unsubCompany(); unsubCategories();
-    };
   }, [user]);
 
-  const handleLogout = () => signOut(auth);
   const handleUpdateUser = (updatedUser: User) => {
-    if (user) setDoc(doc(db, "users", user.id), updatedUser);
+    if (user) {
+      setDoc(doc(db, "users", user.id), updatedUser);
+      localStorage.setItem('susu_user', JSON.stringify(updatedUser));
+    }
   };
+
   const handleUpdateCompany = (updatedCompany: CompanyType) => {
     setDoc(doc(db, "settings", "company"), updatedCompany);
   };
+
   const handleUpdateCategories = (newList: string[]) => {
     setDoc(doc(db, "settings", "categories"), { list: newList });
   };
@@ -218,30 +230,15 @@ const App: React.FC = () => {
         <Route path="/resumo/:id" element={<PublicRentalSummary rentals={rentals} toys={toys} company={company} />} />
         <Route path="*" element={
           !user ? <Login /> : (
-            <Layout user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser}>
+            <Layout user={user} onLogout={() => signOut(auth)} onUpdateUser={handleUpdateUser}>
               <Routes>
                 <Route path="/" element={user.role === UserRole.ADMIN ? <Dashboard rentals={rentals} toysCount={toys.length} transactions={transactions} /> : <Navigate to="/reservas" />} />
-                <Route path="/reservas" element={<Rentals rentals={rentals} setRentals={(action: any) => {
-                    const next = typeof action === 'function' ? action(rentals) : action;
-                    next.forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r));
-                }} customers={customers} setCustomers={() => {}} toys={toys} />} />
-                <Route path="/brinquedos" element={<Inventory toys={toys} setToys={(action: any) => {
-                    const next = typeof action === 'function' ? action(toys) : action;
-                    next.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t));
-                }} categories={categories} setCategories={handleUpdateCategories} />} />
-                <Route path="/clientes" element={<CustomersPage customers={customers} setCustomers={(action: any) => {
-                    const next = typeof action === 'function' ? action(customers) : action;
-                    next.forEach((c: Customer) => setDoc(doc(db, "customers", c.id), c));
-                }} />} />
+                <Route path="/reservas" element={<Rentals rentals={rentals} setRentals={(a: any) => a(rentals).forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r))} customers={customers} setCustomers={() => {}} toys={toys} />} />
+                <Route path="/brinquedos" element={<Inventory toys={toys} setToys={(a: any) => a(toys).forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t))} categories={categories} setCategories={handleUpdateCategories} />} />
+                <Route path="/clientes" element={<CustomersPage customers={customers} setCustomers={(a: any) => a(customers).forEach((c: Customer) => setDoc(doc(db, "customers", c.id), c))} />} />
                 <Route path="/disponibilidade" element={<Availability rentals={rentals} toys={toys} />} />
-                <Route path="/orcamentos" element={<BudgetsPage rentals={rentals} setRentals={(action: any) => {
-                    const next = typeof action === 'function' ? action(rentals) : action;
-                    next.forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r));
-                }} customers={customers} toys={toys} company={company} />} />
-                <Route path="/financeiro" element={user.role === UserRole.ADMIN ? <Financial rentals={rentals} setRentals={()=>{}} transactions={transactions} setTransactions={(action: any) => {
-                    const next = typeof action === 'function' ? action(transactions) : action;
-                    next.forEach((t: FinancialTransaction) => setDoc(doc(db, "transactions", t.id), t));
-                }} /> : <Navigate to="/reservas" />} />
+                <Route path="/orcamentos" element={<BudgetsPage rentals={rentals} setRentals={(a: any) => a(rentals).forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r))} customers={customers} toys={toys} company={company} />} />
+                <Route path="/financeiro" element={user.role === UserRole.ADMIN ? <Financial rentals={rentals} setRentals={()=>{}} transactions={transactions} setTransactions={(a: any) => a(transactions).forEach((t: FinancialTransaction) => setDoc(doc(db, "transactions", t.id), t))} /> : <Navigate to="/reservas" />} />
                 <Route path="/contratos" element={<DocumentsPage type="contract" rentals={rentals} customers={customers} company={company} />} />
                 <Route path="/recibos" element={<DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company} />} />
                 <Route path="/colaboradores" element={user.role === UserRole.ADMIN ? <Staff staff={[]} setStaff={()=>{}} /> : <Navigate to="/reservas" />} />
