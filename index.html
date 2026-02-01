@@ -15,29 +15,76 @@
       rel="stylesheet"
     />
 
-    <!-- jsPDF + html2canvas (dependências do html2pdf) -->
+    <!-- jsPDF + html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <!-- ✅ HTML2PDF (OBRIGATÓRIO) -->
+    <!-- ✅ html2pdf (ESSENCIAL PARA NÃO CORTAR) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
+    <!-- 🔒 CSS GLOBAL + PDF (ANTI-CORTE DEFINITIVO) -->
     <style>
+      /* ===== GLOBAL ===== */
+      html,
       body {
+        margin: 0;
+        padding: 0;
         font-family: 'Inter', sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
       }
+
       .brand-font {
         font-family: 'Fredoka', sans-serif;
       }
 
-      /* Evita cortes na impressão/PDF */
+      /* ===== PRINT / PDF ===== */
       @media print {
         body {
           overflow: visible !important;
         }
+
         .no-print {
           display: none !important;
         }
+      }
+
+      /* ===== PDF LAYOUT FIXO A4 ===== */
+      .pdf-root {
+        background: #ffffff;
+      }
+
+      .pdf-page {
+        width: 210mm;
+        min-height: 297mm;
+        padding: 20mm;
+        margin: 0 auto;
+        background: #ffffff;
+        box-sizing: border-box;
+
+        /* QUEBRA DE PÁGINA */
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden;
+      }
+
+      /* evita quebra dentro de blocos */
+      .pdf-no-break {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      /* quebra manual */
+      .pdf-break {
+        page-break-before: always;
+        break-before: page;
+      }
+
+      /* garante que imagens e tabelas não estourem */
+      img,
+      table {
+        max-width: 100%;
+        height: auto;
       }
     </style>
 
@@ -56,9 +103,6 @@
         }
       }
     </script>
-
-    <!-- CSS do app -->
-    <link rel="stylesheet" href="/index.css" />
   </head>
 
   <body class="bg-slate-50 text-slate-900">
