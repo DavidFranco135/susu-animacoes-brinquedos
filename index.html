@@ -1,114 +1,43 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
     <title>SUSU Animações - Gestão</title>
-
-    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Fonts -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fredoka:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- jsPDF + html2canvas -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <!-- ✅ html2pdf (ESSENCIAL PARA NÃO CORTAR) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-
-    <!-- 🔒 CSS GLOBAL + PDF (ANTI-CORTE DEFINITIVO) -->
     <style>
-      /* ===== GLOBAL ===== */
-      html,
       body {
-        margin: 0;
-        padding: 0;
         font-family: 'Inter', sans-serif;
-        background: #f8fafc;
-        color: #0f172a;
       }
-
       .brand-font {
         font-family: 'Fredoka', sans-serif;
       }
-
-      /* ===== PRINT / PDF ===== */
       @media print {
-        body {
-          overflow: visible !important;
-        }
-
-        .no-print {
-          display: none !important;
-        }
-      }
-
-      /* ===== PDF LAYOUT FIXO A4 ===== */
-      .pdf-root {
-        background: #ffffff;
-      }
-
-      .pdf-page {
-        width: 210mm;
-        min-height: 297mm;
-        padding: 20mm;
-        margin: 0 auto;
-        background: #ffffff;
-        box-sizing: border-box;
-
-        /* QUEBRA DE PÁGINA */
-        page-break-after: always;
-        break-after: page;
-        overflow: hidden;
-      }
-
-      /* evita quebra dentro de blocos */
-      .pdf-no-break {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-
-      /* quebra manual */
-      .pdf-break {
-        page-break-before: always;
-        break-before: page;
-      }
-
-      /* garante que imagens e tabelas não estourem */
-      img,
-      table {
-        max-width: 100%;
-        height: auto;
+        .no-print { display: none !important; }
       }
     </style>
-
-    <!-- Import Map -->
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@^19.2.4",
-          "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-          "react/": "https://esm.sh/react@^19.2.4/",
-          "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-          "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
-          "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-          "recharts": "https://esm.sh/recharts@^3.7.0",
-          "firebase/": "https://esm.sh/firebase@^12.8.0/"
-        }
-      }
-    </script>
-  </head>
-
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-
-    <!-- Entry -->
-    <script type="module" src="/index.tsx"></script>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
