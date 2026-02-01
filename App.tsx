@@ -45,14 +45,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// COMPONENTE LOGIN CORRIGIDO (ANTI-PISCAR)
 const Login: React.FC = () => {
   const [email, setEmail] = useState('admsusu@gmail.com');
   const [password, setPassword] = useState('123456');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Pegamos a foto diretamente do localStorage para evitar o flash branco
   const [displayPhoto] = useState(() => {
     try {
       const userStr = localStorage.getItem('susu_user');
@@ -60,9 +58,7 @@ const Login: React.FC = () => {
         const userData = JSON.parse(userStr);
         return userData.profilePhotoUrl || "https://images.unsplash.com/photo-1530103862676-fa8c91811678?q=80&w=500&auto=format&fit=crop";
       }
-    } catch (e) {
-      console.error("Erro ao carregar foto do cache", e);
-    }
+    } catch (e) { console.error(e); }
     return "https://images.unsplash.com/photo-1530103862676-fa8c91811678?q=80&w=500&auto=format&fit=crop";
   });
 
@@ -83,21 +79,10 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100 flex flex-col items-center">
         <div className="text-center mb-10 w-full flex flex-col items-center">
-          <div 
-            style={{ width: '128px', height: '128px', minWidth: '128px' }} 
-            className="bg-slate-50 rounded-[40px] flex items-center justify-center mb-6 shadow-xl border-4 border-white overflow-hidden relative"
-          >
-             <img 
-               src={displayPhoto} 
-               alt="Logo Login" 
-               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-               className="w-full h-full object-cover"
-               onError={(e) => {
-                 (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1530103862676-fa8c91811678?q=80&w=500&auto=format&fit=crop";
-               }}
-             />
+          <div style={{ width: '128px', height: '128px', minWidth: '128px' }} className="bg-slate-50 rounded-[40px] flex items-center justify-center mb-6 shadow-xl border-4 border-white overflow-hidden relative">
+             <img src={displayPhoto} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} className="w-full h-full object-cover" />
           </div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Painel Administrativo</h2>
+          <h2 className="text-xl font-black text-slate-800 uppercase tracking-widest">Painel Administrativo</h2>
           <p className="text-slate-400 mt-1 font-medium text-sm">SUSU Animações e Brinquedos</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6 w-full">
@@ -160,44 +145,27 @@ const App: React.FC = () => {
       setAuthLoading(false);
     });
 
-    // Real-time collections
     const qToys = query(collection(db, "toys"));
-    const unsubToys = onSnapshot(qToys, (snap) => {
-      setToys(snap.docs.map(d => ({ id: d.id, ...d.data() } as Toy)));
-    });
+    onSnapshot(qToys, (snap) => setToys(snap.docs.map(d => ({ id: d.id, ...d.data() } as Toy))));
 
     const qRentals = query(collection(db, "rentals"), orderBy("date", "desc"));
-    const unsubRentals = onSnapshot(qRentals, (snap) => {
-      setRentals(snap.docs.map(d => ({ id: d.id, ...d.data() } as Rental)));
-    });
+    onSnapshot(qRentals, (snap) => setRentals(snap.docs.map(d => ({ id: d.id, ...d.data() } as Rental))));
 
     const qCust = query(collection(db, "customers"));
-    const unsubCust = onSnapshot(qCust, (snap) => {
-      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
-    });
+    onSnapshot(qCust, (snap) => setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Customer))));
 
     const qTrans = query(collection(db, "transactions"), orderBy("date", "desc"));
-    const unsubTrans = onSnapshot(qTrans, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as FinancialTransaction)));
-    });
+    onSnapshot(qTrans, (snap) => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as FinancialTransaction))));
 
-    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (snap) => {
+    onSnapshot(doc(db, "settings", "company"), (snap) => {
       if (snap.exists()) setCompany(snap.data() as CompanyType);
     });
 
-    const unsubCats = onSnapshot(doc(db, "settings", "categories"), (snap) => {
+    onSnapshot(doc(db, "settings", "categories"), (snap) => {
       if (snap.exists()) setCategories(snap.data().list || []);
     });
 
-    return () => {
-      unsubscribe();
-      unsubToys();
-      unsubRentals();
-      unsubCust();
-      unsubTrans();
-      unsubCompany();
-      unsubCats();
-    };
+    return () => unsubscribe();
   }, []);
 
   const handleUpdateUser = (updatedUser: User) => {
@@ -205,23 +173,7 @@ const App: React.FC = () => {
     localStorage.setItem('susu_user', JSON.stringify(updatedUser));
   };
 
-  const handleUpdateCompany = (updatedCompany: CompanyType) => {
-    setCompany(updatedCompany);
-    setDoc(doc(db, "settings", "company"), updatedCompany);
-  };
-
-  const handleUpdateCategories = (newCats: string[]) => {
-    setCategories(newCats);
-    setDoc(doc(db, "settings", "categories"), { list: newCats });
-  };
-
-  if (authLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-blue-600" size={40} />
-      </div>
-    );
-  }
+  if (authLoading) return <div className="h-screen w-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
 
   return (
     <Router>
@@ -232,7 +184,7 @@ const App: React.FC = () => {
             <Layout user={user} onLogout={() => signOut(auth)}>
               <Routes>
                 <Route path="/" element={<Dashboard rentals={rentals} toys={toys} transactions={transactions} />} />
-                <Route path="/estoque" element={<Inventory toys={toys} setToys={setToys} categories={categories} setCategories={handleUpdateCategories} />} />
+                <Route path="/estoque" element={<Inventory toys={toys} setToys={setToys} categories={categories} setCategories={(c) => setDoc(doc(db, "settings", "categories"), { list: c })} />} />
                 <Route path="/clientes" element={<CustomersPage customers={customers} setCustomers={()=>{}} />} />
                 <Route path="/disponibilidade" element={<Availability rentals={rentals} toys={toys} />} />
                 <Route path="/orcamentos" element={<BudgetsPage rentals={rentals} setRentals={()=>{}} customers={customers} toys={toys} company={company} />} />
@@ -242,12 +194,12 @@ const App: React.FC = () => {
                 }} customers={customers} toys={toys} company={company} />} />
                 <Route path="/financeiro" element={user.role === UserRole.ADMIN ? <Financial rentals={rentals} setRentals={()=>{}} transactions={transactions} setTransactions={(action: any) => {
                     const next = typeof action === 'function' ? action(transactions) : action;
-                    next.forEach((t: FinancialTransaction) => setDoc(doc(db, \"transactions\", t.id), t));
+                    next.forEach((t: FinancialTransaction) => setDoc(doc(db, "transactions", t.id), t));
                 }} /> : <Navigate to="/reservas" />} />
                 <Route path="/contratos" element={<DocumentsPage type="contract" rentals={rentals} customers={customers} company={company} />} />
                 <Route path="/recibos" element={<DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company} />} />
                 <Route path="/colaboradores" element={user.role === UserRole.ADMIN ? <Staff staff={[]} setStaff={()=>{}} /> : <Navigate to="/reservas" />} />
-                <Route path="/configuracoes" element={user.role === UserRole.ADMIN ? <AppSettings company={company} setCompany={handleUpdateCompany} user={user} onUpdateUser={handleUpdateUser} /> : <Navigate to="/reservas" />} />
+                <Route path="/configuracoes" element={user.role === UserRole.ADMIN ? <AppSettings company={company} setCompany={(c) => setDoc(doc(db, "settings", "company"), c)} user={user} onUpdateUser={handleUpdateUser} /> : <Navigate to="/reservas" />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
