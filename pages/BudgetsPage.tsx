@@ -200,6 +200,51 @@ const BudgetsPage: React.FC<Props> = ({ rentals, customers, toys, company, setRe
     }
   }
 };
+    
+    // Feedback de sucesso
+    loadingDiv.innerHTML = `
+      <div class="bg-white rounded-3xl p-8 text-center space-y-4">
+        <div class="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mx-auto">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+        <p class="font-black text-slate-800 text-sm uppercase tracking-widest">PDF Gerado!</p>
+      </div>
+    `;
+    
+    setTimeout(() => loadingDiv.remove(), 1500);
+    
+  } catch (err) {
+    console.error("PDF Error:", err);
+    
+    // Mostra erro amigável
+    loadingDiv.innerHTML = `
+      <div class="bg-white rounded-3xl p-8 text-center space-y-4 max-w-sm">
+        <div class="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </div>
+        <p class="font-black text-slate-800 text-sm uppercase tracking-widest">Erro ao gerar PDF</p>
+        <p class="text-xs text-slate-400">Tente novamente ou use um navegador diferente</p>
+        <button onclick="document.getElementById('pdf-loading').remove()" class="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase">
+          Fechar
+        </button>
+      </div>
+    `;
+    
+  } finally {
+    // Restaura estilos originais
+    Object.keys(originalStyles).forEach(key => {
+      element.style[key] = originalStyles[key];
+    });
+    
+    if (element.classList.contains('hidden')) {
+      element.classList.add('hidden');
+    }
+  }
+};
 
 
   const handleSendWhatsApp = (budget: Rental) => {
