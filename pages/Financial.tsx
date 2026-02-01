@@ -1,19 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
-  BarChart, Bar, AreaChart, Area, PieChart, Pie, Legend
+  BarChart, Bar, AreaChart, Area, PieChart, Pie, Legend, LineChart, Line,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, Plus, X, Filter, Download, DollarSign, ChevronRight, PieChart as PieIcon, Activity, BarChart3, Clock, CheckCircle2, AlertCircle, ArrowUpRight } from 'lucide-react';
-import { FinancialTransaction, Rental, RentalStatus, User, PaymentMethod } from '../types';
+import { Wallet, TrendingUp, TrendingDown, Plus, X, Filter, Download, DollarSign, ChevronRight, PieChart as PieIcon, Activity, BarChart3, Clock, CheckCircle2, AlertCircle, ArrowUpRight, Calendar, Package } from 'lucide-react';
+import { FinancialTransaction, Rental, RentalStatus, User, PaymentMethod, Toy } from '../types';
 
 interface Props {
   rentals: Rental[];
   setRentals: React.Dispatch<React.SetStateAction<Rental[]>>;
   transactions: FinancialTransaction[];
   setTransactions: React.Dispatch<React.SetStateAction<FinancialTransaction[]>>;
+  toys: Toy[];
 }
 
-const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTransactions }) => {
+const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTransactions, toys }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [detailModal, setDetailModal] = useState<{ isOpen: boolean; type: 'INCOME' | 'EXPENSE' | 'PROFIT' | 'PENDING' | null }>({
@@ -60,6 +62,157 @@ const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTran
   const profitMargin = totalRealizedIncome > 0 ? (netProfit / totalRealizedIncome) * 100 : 0;
   const totalPending = useMemo(() => filteredData.rentals.filter(r => r.status !== RentalStatus.CANCELLED && r.status !== RentalStatus.COMPLETED).reduce((acc, r) => acc + (r.totalValue - (r.entryValue || 0)), 0), [filteredData]);
 
+  // NOVOS DADOS PARA GRÁFICOS
+  
+  // 1. Evolução Mensal (Receitas vs Despesas)
+  const monthlyEvolution = useMemo(() => {
+    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+    return months.map(m => {
+      const monthRentals = rentals.filter(r => r.date.includes(`-${m}-`) && r.date.startsWith(filterYear));
+      const monthTransactions = transactions.filter(t => t.date.includes(`-${m}-`) && t.date.startsWith(filterYear));
+      
+      let income = 0;
+      monthRentals.forEach(r => {
+        if (r.status === RentalStatus.CANCELLED) return;
+        income += r.entryValue || 0;
+        if (r.status === RentalStatus.COMPLETED) income += (r.totalValue - (r.entryValue || 0));
+      });
+      monthTransactions.forEach(t => {
+        if (t.type !== 'EXPENSE') income += Number(t.value);
+      });
+      
+      const expense = monthTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + Number(t.value), 0);
+      const profit = income - expense;
+      
+      return {
+        month: new Date(2025, parseInt(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase(),
+        receita: income,
+        despesa: expense,
+        lucro: profit
+      };
+    });
+  }, [rentals, transactions, filterYear]);
+
+  // 2. Status das Reservas (Gráfico Pizza)
+  const reservationStatus = useMemo(() => {
+    const statusCount = {
+      [RentalStatus.PENDING]: 0,
+      [RentalStatus.CONFIRMED]: 0,
+      [RentalStatus.COMPLETED]: 0,
+      [RentalStatus.CANCELLED]: 0
+    };
+    
+    filteredData.rentals.forEach(r => {
+      statusCount[r.status]++;
+    });
+    
+    return [
+      { name: 'Pendente', value: statusCount[RentalStatus.PENDING], color: '#f59e0b' },
+      { name: 'Confirmado', value: statusCount[RentalStatus.CONFIRMED], color: '#10b981' },
+      { name: 'Concluído', value: statusCount[RentalStatus.COMPLETED], color: '#3b82f6' },
+      { name: 'Cancelado', value: statusCount[RentalStatus.CANCELLED], color: '#ef4444' }
+    ].filter(s => s.value > 0);
+  }, [filteredData]);
+
+  // 3. Brinquedos Mais Alugados
+  const topToys = useMemo(() => {
+    const toyCount: { [key: string]: number } = {};
+    
+    filteredData.rentals.forEach(r => {
+      if (r.status === RentalStatus.CANCELLED) return;
+      r.toyIds.forEach(tid => {
+        toyCount[tid] = (toyCount[tid] || 0) + 1;
+      });
+    });
+    
+    return Object.entries(toyCount)
+      .map(([toyId, count]) => {
+        const toy = toys.find(t => t.id === toyId);
+        return {
+          name: toy?.name || 'Desconhecido',
+          quantidade: count,
+          receita: (toy?.price || 0) * count
+        };
+      })
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 8);
+  }, [filteredData, toys]);
+
+  // 4. Despesas por Categoria
+  const expensesByCategory = useMemo(() => {
+    const categories: { [key: string]: number } = {};
+    
+    filteredData.transactions.filter(t => t.type === 'EXPENSE').forEach(t => {
+      const cat = t.category || 'Outros';
+      categories[cat] = (categories[cat] || 0) + Number(t.value);
+    });
+    
+    return Object.entries(categories).map(([name, value]) => ({
+      name,
+      value,
+      percent: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) : '0'
+    })).sort((a, b) => b.value - a.value);
+  }, [filteredData, totalExpenses]);
+
+  // 5. Métodos de Pagamento
+  const paymentMethods = useMemo(() => {
+    const methods: { [key: string]: number } = {};
+    
+    filteredData.rentals.forEach(r => {
+      if (r.status === RentalStatus.CANCELLED) return;
+      const method = r.paymentMethod || 'Não Especificado';
+      methods[method] = (methods[method] || 0) + 1;
+    });
+    
+    return Object.entries(methods).map(([name, value]) => ({
+      name,
+      value,
+      color: name === 'PIX' ? '#10b981' : name === 'Dinheiro' ? '#f59e0b' : name === 'Cartão' ? '#3b82f6' : '#6366f1'
+    }));
+  }, [filteredData]);
+
+  // 6. Taxa de Conversão (Confirmados vs Total)
+  const conversionRate = useMemo(() => {
+    const total = filteredData.rentals.filter(r => r.status !== RentalStatus.CANCELLED).length;
+    const confirmed = filteredData.rentals.filter(r => r.status === RentalStatus.CONFIRMED || r.status === RentalStatus.COMPLETED).length;
+    
+    return [
+      { name: 'Confirmados', value: confirmed, color: '#10b981' },
+      { name: 'Pendentes', value: total - confirmed, color: '#f59e0b' }
+    ];
+  }, [filteredData]);
+
+  // 7. Performance Diária (últimos 30 dias)
+  const dailyPerformance = useMemo(() => {
+    const last30Days = Array.from({ length: 30 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (29 - i));
+      return date.toISOString().split('T')[0];
+    });
+    
+    return last30Days.map(date => {
+      const dayRentals = rentals.filter(r => r.date === date && r.status !== RentalStatus.CANCELLED);
+      const revenue = dayRentals.reduce((acc, r) => {
+        let val = r.entryValue || 0;
+        if (r.status === RentalStatus.COMPLETED) val = r.totalValue;
+        return acc + val;
+      }, 0);
+      
+      return {
+        day: new Date(date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        receita: revenue,
+        eventos: dayRentals.length
+      };
+    });
+  }, [rentals]);
+
+  // 8. Ticket Médio por Evento
+  const averageTicket = useMemo(() => {
+    const completed = filteredData.rentals.filter(r => r.status === RentalStatus.COMPLETED);
+    if (completed.length === 0) return 0;
+    return completed.reduce((acc, r) => acc + r.totalValue, 0) / completed.length;
+  }, [filteredData]);
+
   const handleSettleDebt = (rentalId: string) => {
     if (!confirm("Confirmar que o cliente pagou o saldo restante? Esta reserva será marcada como CONCLUÍDA.")) return;
     setRentals(prev => prev.map(r => r.id === rentalId ? { ...r, status: RentalStatus.COMPLETED, entryValue: r.totalValue } : r));
@@ -75,14 +228,12 @@ const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTran
         return;
       }
       
-      // Tornar visível temporariamente
       element.style.display = 'block';
       element.style.position = 'absolute';
       element.style.left = '-9999px';
       element.style.top = '0';
       element.style.width = '1200px';
       
-      // Aguardar renderização
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const canvas = await (window as any).html2canvas(element, {
@@ -158,6 +309,22 @@ const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTran
       </div>
     </div>
   );
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border-2 border-white">
+          <p className="font-black text-xs mb-2 opacity-60">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="font-bold text-sm" style={{ color: entry.color }}>
+              {entry.name}: R$ {entry.value.toLocaleString('pt-BR')}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-20">
@@ -299,6 +466,221 @@ const Financial: React.FC<Props> = ({ rentals, setRentals, transactions, setTran
         <StatCard title="Despesas" value={totalExpenses} sub="Ver Detalhes" icon={<TrendingDown size={24}/>} color="red" type="EXPENSE" />
         <StatCard title="Lucro Líquido" value={netProfit} sub="Ver Composição" icon={<Wallet size={24}/>} color="blue" type="PROFIT" />
         <StatCard title="Valores Pendentes" value={totalPending} sub="Recebíveis" icon={<Clock size={24}/>} color="amber" type="PENDING" />
+      </div>
+
+      {/* NOVOS CARDS DE MÉTRICAS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
+        <StatCard title="Ticket Médio" value={averageTicket} sub={`${filteredData.rentals.filter(r => r.status === RentalStatus.COMPLETED).length} Eventos Concluídos`} icon={<DollarSign size={24}/>} color="purple" />
+        <StatCard title="Margem de Lucro" value={profitMargin} sub="Sobre Receita Bruta" icon={<Activity size={24}/>} color="indigo" isMoney={false} />
+        <StatCard title="Total de Reservas" value={filteredData.rentals.filter(r => r.status !== RentalStatus.CANCELLED).length} sub="No Período" icon={<Calendar size={24}/>} color="pink" isMoney={false} />
+      </div>
+
+      {/* SEÇÃO DE GRÁFICOS */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print:hidden">
+        
+        {/* Evolução Mensal */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><BarChart3 size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Evolução Mensal</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Receitas vs Despesas ({filterYear})</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={monthlyEvolution}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+              <Bar dataKey="receita" fill="#10b981" name="Receita" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="despesa" fill="#ef4444" name="Despesa" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="lucro" fill="#3b82f6" name="Lucro" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Status das Reservas */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl"><PieIcon size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Status das Reservas</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Distribuição por Status</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={reservationStatus}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {reservationStatus.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Brinquedos Mais Alugados */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl"><Package size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Top Brinquedos</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Mais Alugados no Período</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={topToys} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+              <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} width={100} />
+              <Tooltip />
+              <Bar dataKey="quantidade" fill="#10b981" radius={[0, 8, 8, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Despesas por Categoria */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-50 text-red-600 rounded-2xl"><PieIcon size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Despesas por Categoria</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Distribuição de Custos</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={expensesByCategory}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }: any) => `${name} ${percent}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {expensesByCategory.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#ef4444', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'][index % 5]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Métodos de Pagamento */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><Wallet size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Métodos de Pagamento</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Preferências dos Clientes</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={paymentMethods}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, value }: any) => `${name}: ${value}`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {paymentMethods.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Taxa de Conversão */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl"><CheckCircle2 size={20}/></div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Taxa de Conversão</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Confirmados vs Pendentes</p>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={conversionRate}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, value, percent }: any) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {conversionRate.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+      </div>
+
+      {/* Performance Diária (Últimos 30 dias) */}
+      <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm print:hidden">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><Activity size={20}/></div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Performance Diária</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Últimos 30 Dias</p>
+            </div>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={dailyPerformance}>
+            <defs>
+              <linearGradient id="colorReceita" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} />
+            <YAxis tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="receita" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorReceita)" />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
 
       {detailModal.isOpen && (
