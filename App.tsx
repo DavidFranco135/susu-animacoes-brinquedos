@@ -32,7 +32,7 @@ import BudgetsPage from './pages/BudgetsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import PublicRentalSummary from './pages/PublicRentalSummary';
 import { Customer, Toy, Rental, User, UserRole, FinancialTransaction, CompanySettings as CompanyType } from './types';
-import { User as UserIcon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUvwY-e7h0KZyFJv7n0ignpzlMUGJIurU",
@@ -60,19 +60,17 @@ const Login: React.FC = () => {
     setError('');
     
     try {
-      // Tenta fazer o login
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
-      // Se o erro for que o usuário não existe e for o e-mail do admin, cria automaticamente
       if ((err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') && email === 'admsusu@gmail.com') {
         try {
           await createUserWithEmailAndPassword(auth, email, password);
-          return; // O onAuthStateChanged lidará com o resto
+          return;
         } catch (createErr: any) {
           setError('Erro ao criar conta administrativa. Verifique o console do Firebase.');
         }
       } else {
-        setError('E-mail ou senha inválidos. Verifique se o provedor E-mail/Senha está ativo no Firebase.');
+        setError('E-mail ou senha inválidos. Verifique suas credenciais.');
       }
     } finally {
       setLoading(false);
@@ -81,13 +79,13 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100 flex flex-col items-center">
+      <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100 flex flex-col items-center animate-in fade-in zoom-in duration-500">
         <div className="text-center mb-10 w-full flex flex-col items-center">
-          <div className="w-28 h-28 bg-blue-50 rounded-[40px] flex items-center justify-center mb-6 shadow-xl border-4 border-white overflow-hidden text-blue-300">
-             <UserIcon size={56} />
+          <div className="w-32 h-32 mb-6 flex items-center justify-center overflow-hidden">
+             <img src="logo.png" alt="SUSU Animações" className="w-full h-full object-contain" />
           </div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Painel Administrativo</h2>
-          <p className="text-slate-400 mt-1 font-medium text-sm">SUSU Animações e Brinquedos</p>
+          <p className="text-slate-400 mt-1 font-medium text-sm">Controle sua diversão em um só lugar</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6 w-full">
           {error && <div className="p-4 bg-red-50 text-red-500 text-xs font-bold rounded-2xl text-center">{error}</div>}
@@ -102,7 +100,7 @@ const Login: React.FC = () => {
           <button type="submit" disabled={loading} className="w-full bg-gradient-to-br from-cyan-400 to-blue-600 text-white font-black py-5 rounded-2xl hover:shadow-2xl hover:scale-[1.02] transition-all shadow-xl shadow-blue-100 uppercase tracking-widest text-sm flex items-center justify-center gap-3">
             {loading ? <Loader2 className="animate-spin" size={20}/> : 'Entrar no Sistema'}
           </button>
-          <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4">Nota: O primeiro acesso do administrador cria a conta automaticamente.</p>
+          <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 italic">Sistema de Gestão Profissional - SUSU Animações</p>
         </form>
       </div>
     </div>
@@ -144,7 +142,6 @@ const App: React.FC = () => {
             setDoc(userDocRef, userData);
           }
           setUser(userData);
-          // Sincroniza com localStorage para compatibilidade com componentes que ainda usam getItem('susu_user')
           localStorage.setItem('susu_user', JSON.stringify(userData));
         });
       } else {
