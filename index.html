@@ -5,13 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SUSU Animações - Gestão</title>
     
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta name="apple-mobile-web-app-title" content="Susu Animações">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.json" />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
-      /* Estilos base direto no HTML para não depender de arquivo .css */
       body {
         font-family: 'Inter', sans-serif;
         background-color: #F8FAFC;
@@ -20,7 +25,6 @@
       .brand-font {
         font-family: 'Fredoka', sans-serif;
       }
-      /* Fix para a foto do login não piscar */
       .login-img-container {
         background-color: #f1f5f9;
         display: flex;
@@ -28,8 +32,15 @@
         justify-content: center;
         overflow: hidden;
       }
+
+      /* CORREÇÃO PARA FOTOS NO PDF MOBILE */
       @media print {
         .no-print { display: none !important; }
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
       }
     </style>
 
