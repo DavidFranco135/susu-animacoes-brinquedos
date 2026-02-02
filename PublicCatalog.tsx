@@ -179,7 +179,8 @@ const PublicCatalog: React.FC = () => {
                 <div className="flex items-center justify-between pt-6 border-t border-slate-50">
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Valor Locação
+                      Valor Locação- 
+                      a partir de:
                     </p>
                     <p className="text-2xl font-black text-blue-600">
                       R$ {toy.price.toLocaleString('pt-BR')}
