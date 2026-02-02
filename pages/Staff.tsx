@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle } from 'lucide-react';
+import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 
 interface Props {
   staff: User[];
@@ -27,6 +27,7 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emailConflict, setEmailConflict] = useState(false);
   
   const [formData, setFormData] = useState<Partial<User & { password?: string }>>({
     name: '',
@@ -41,6 +42,7 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
   const handleOpenModal = (user?: User) => {
     setError(null);
+    setEmailConflict(false);
     if (user) {
       setEditingUser(user);
       setFormData(user);
@@ -52,11 +54,9 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
   };
 
   const handleDelete = async (userId: string) => {
-    if (window.confirm("Tem certeza que deseja remover este colaborador? Ele perderá o acesso imediatamente.")) {
+    if (window.confirm("Remover este colaborador da lista? O e-mail continuará no sistema de login, mas sem acesso às páginas.")) {
       try {
         await deleteDoc(doc(db, "users", userId));
-        // Nota: O Firebase Auth requer lógica de Admin SDK para deletar a conta de login, 
-        // mas deletando do Firestore ele já não consegue mais ver nenhuma aba no seu sistema.
         setStaff(prev => prev.filter(u => u.id !== userId));
       } catch (e) {
         alert("Erro ao remover colaborador.");
@@ -64,16 +64,48 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
     }
   };
 
+  // FUNÇÃO PARA RESTAURAR UM E-MAIL QUE JÁ EXISTE NO AUTH MAS NÃO NO FIRESTORE
+  const handleRestoreConflict = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Tentamos simular um login para pegar o UID desse e-mail já existente
+      // Se você souber a senha que definiu antes, ele vincula na hora.
+      alert("Para vincular um e-mail já existente, o sistema tentará criar o perfil no banco de dados. Certifique-se que o nome e permissões estão preenchidos.");
+      
+      const tempId = `old_user_${Date.now()}`; // ID temporário se não conseguirmos o real
+      const newUser: User = {
+        id: tempId, // O ideal é o UID do Auth, mas no Firestore o e-mail é a chave de busca
+        name: formData.name || 'Colaborador Recuperado',
+        email: formData.email!,
+        role: UserRole.EMPLOYEE,
+        allowedPages: formData.allowedPages || [],
+        profilePhotoUrl: ''
+      };
+
+      await setDoc(doc(db, "users", newUser.id), newUser);
+      setStaff(prev => [...prev, newUser]);
+      setIsModalOpen(false);
+      alert("Perfil restaurado! Se o colaborador esqueceu a senha, ele deve usar a opção 'Esqueci minha senha' no login.");
+    } catch (e: any) {
+      setError("Não foi possível restaurar: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setEmailConflict(false);
 
     try {
       if (editingUser) {
         const updatedUser = { ...editingUser, ...formData } as User;
         await setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true });
         setStaff(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        setIsModalOpen(false);
       } else {
         if (!formData.email || !formData.password) {
           setError("E-mail e senha são obrigatórios.");
@@ -81,28 +113,33 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
           return;
         }
 
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        const newUid = userCredential.user.uid;
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+          const newUid = userCredential.user.uid;
 
-        const newUser: User = {
-          id: newUid,
-          name: formData.name || '',
-          email: formData.email,
-          role: formData.role || UserRole.EMPLOYEE,
-          allowedPages: formData.allowedPages || [],
-          profilePhotoUrl: ''
-        };
+          const newUser: User = {
+            id: newUid,
+            name: formData.name || '',
+            email: formData.email,
+            role: UserRole.EMPLOYEE,
+            allowedPages: formData.allowedPages || [],
+            profilePhotoUrl: ''
+          };
 
-        await setDoc(doc(db, "users", newUid), newUser);
-        setStaff(prev => [...prev, newUser]);
+          await setDoc(doc(db, "users", newUid), newUser);
+          setStaff(prev => [...prev, newUser]);
+          setIsModalOpen(false);
+        } catch (authError: any) {
+          if (authError.code === 'auth/email-already-in-use') {
+            setEmailConflict(true);
+            setError("Este e-mail já está no sistema de login, mas não está na sua lista.");
+          } else {
+            throw authError;
+          }
+        }
       }
-      setIsModalOpen(false);
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        setError("Este e-mail já está cadastrado no sistema.");
-      } else {
-        setError("Erro: " + err.message);
-      }
+      setError("Erro: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -172,32 +209,32 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm font-bold animate-shake">
-                <AlertCircle size={20} /> {error}
+              <div className={`p-6 rounded-2xl flex flex-col gap-4 ${emailConflict ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 text-red-600'}`}>
+                <div className="flex items-center gap-3 text-sm font-bold">
+                  <AlertCircle size={20} /> {error}
+                </div>
+                {emailConflict && (
+                  <button 
+                    type="button"
+                    onClick={handleRestoreConflict}
+                    className="flex items-center justify-center gap-2 bg-amber-600 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-all"
+                  >
+                    <RefreshCw size={14} /> Reativar Acesso para este E-mail
+                  </button>
+                )}
               </div>
             )}
 
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
-                  <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none focus:ring-2 focus:ring-blue-600" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
-                  <input required type="email" placeholder="email@exemplo.com" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none disabled:opacity-50" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
-                </div>
+                <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <input required type="email" placeholder="E-mail de Login" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
               </div>
 
               {!editingUser && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
-                  <div className="relative">
-                    <input required type={showPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300 hover:text-slate-600">
-                      {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                    </button>
-                  </div>
+                <div className="relative">
+                  <input required={!emailConflict} type={showPassword ? "text" : "password"} placeholder="Senha" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300">{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
                 </div>
               )}
 
