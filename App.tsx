@@ -233,7 +233,7 @@ const App: React.FC = () => {
                   />
                 } />
                
-<Route path="/estoque" element={
+<Route path="/brinquedos" element={
   user.role === UserRole.ADMIN ? (
     <Inventory 
       toys={toys} 
