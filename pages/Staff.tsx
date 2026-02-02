@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2 } from 'lucide-react';
+import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore";
 
 interface Props {
   staff: User[];
@@ -26,6 +26,8 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState<Partial<User & { password?: string }>>({
     name: '',
     email: '',
@@ -37,28 +39,51 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
   const auth = getAuth();
   const db = getFirestore();
 
+  const handleOpenModal = (user?: User) => {
+    setError(null);
+    if (user) {
+      setEditingUser(user);
+      setFormData(user);
+    } else {
+      setEditingUser(null);
+      setFormData({ name: '', email: '', password: '', role: UserRole.EMPLOYEE, allowedPages: [] });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (window.confirm("Tem certeza que deseja remover este colaborador? Ele perderá o acesso imediatamente.")) {
+      try {
+        await deleteDoc(doc(db, "users", userId));
+        // Nota: O Firebase Auth requer lógica de Admin SDK para deletar a conta de login, 
+        // mas deletando do Firestore ele já não consegue mais ver nenhuma aba no seu sistema.
+        setStaff(prev => prev.filter(u => u.id !== userId));
+      } catch (e) {
+        alert("Erro ao remover colaborador.");
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       if (editingUser) {
-        // Atualização de usuário existente
         const updatedUser = { ...editingUser, ...formData } as User;
         await setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true });
         setStaff(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
       } else {
-        // CRIAÇÃO DE NOVO USUÁRIO (Autenticação + Banco de Dados)
         if (!formData.email || !formData.password) {
-          alert("E-mail e senha são obrigatórios");
+          setError("E-mail e senha são obrigatórios.");
+          setLoading(false);
           return;
         }
 
-        // 1. Cria o usuário no Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const newUid = userCredential.user.uid;
 
-        // 2. Prepara o objeto do usuário para o Firestore
         const newUser: User = {
           id: newUid,
           name: formData.name || '',
@@ -68,17 +93,16 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
           profilePhotoUrl: ''
         };
 
-        // 3. Salva no Firestore
         await setDoc(doc(db, "users", newUid), newUser);
         setStaff(prev => [...prev, newUser]);
       }
-
       setIsModalOpen(false);
-      setEditingUser(null);
-      setFormData({ name: '', email: '', password: '', role: UserRole.EMPLOYEE, allowedPages: [] });
-    } catch (error: any) {
-      console.error(error);
-      alert("Erro ao criar/editar colaborador: " + error.message);
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Este e-mail já está cadastrado no sistema.");
+      } else {
+        setError("Erro: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -86,11 +110,12 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
   const togglePage = (pageId: string) => {
     const currentPages = formData.allowedPages || [];
-    if (currentPages.includes(pageId)) {
-      setFormData({ ...formData, allowedPages: currentPages.filter(id => id !== pageId) });
-    } else {
-      setFormData({ ...formData, allowedPages: [...currentPages, pageId] });
-    }
+    setFormData({
+      ...formData,
+      allowedPages: currentPages.includes(pageId)
+        ? currentPages.filter(id => id !== pageId)
+        : [...currentPages, pageId]
+    });
   };
 
   return (
@@ -100,39 +125,28 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
           <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Colaboradores</h1>
           <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px] mt-2">Gestão de Equipe e Permissões</p>
         </div>
-        <button 
-          onClick={() => {
-            setEditingUser(null);
-            setFormData({ name: '', email: '', password: '', role: UserRole.EMPLOYEE, allowedPages: [] });
-            setIsModalOpen(true);
-          }}
-          className="bg-slate-900 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-600 transition-all shadow-2xl flex items-center justify-center gap-3"
-        >
+        <button onClick={() => handleOpenModal()} className="bg-slate-900 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-600 transition-all shadow-2xl flex items-center justify-center gap-3">
           <Plus size={20} /> Novo Colaborador
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {staff.map((member) => (
-          <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+          <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative">
             <div className="flex items-start justify-between mb-6">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors overflow-hidden">
                 {member.profilePhotoUrl ? (
-                  <img src={member.profilePhotoUrl} className="w-full h-full object-cover" />
+                  <img src={member.profilePhotoUrl} className="w-full h-full object-cover" alt="" />
                 ) : (
                   <UsersRound size={28} />
                 )}
               </div>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    setEditingUser(member);
-                    setFormData(member);
-                    setIsModalOpen(true);
-                  }}
-                  className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"
-                >
+                <button onClick={() => handleOpenModal(member)} className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all">
                   <Shield size={18} />
+                </button>
+                <button onClick={() => handleDelete(member.id)} className="p-3 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
@@ -157,16 +171,33 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
               <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all"><X size={20}/></button>
             </div>
 
+            {error && (
+              <div className="p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm font-bold animate-shake">
+                <AlertCircle size={20} /> {error}
+              </div>
+            )}
+
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                <input required type="email" placeholder="E-mail de Login" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
+                  <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none focus:ring-2 focus:ring-blue-600" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+                  <input required type="email" placeholder="email@exemplo.com" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none disabled:opacity-50" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
+                </div>
               </div>
 
               {!editingUser && (
-                <div className="relative">
-                  <input required type={showPassword ? "text" : "password"} placeholder="Definir Senha Inicial" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300 hover:text-slate-600">{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
+                  <div className="relative">
+                    <input required type={showPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300 hover:text-slate-600">
+                      {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -193,11 +224,9 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
-                {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? 'Salvar Alterações' : 'Criar e Autorizar'}
-              </button>
-            </div>
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all">
+              {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? '💾 Atualizar Colaborador' : '✨ Criar Acesso'}
+            </button>
           </form>
         </div>
       )}
