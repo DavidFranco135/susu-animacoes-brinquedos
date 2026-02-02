@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle } from 'lucide-react';
+import { UsersRound, Plus, Shield, Trash2, X, Eye, EyeOff, Check, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, deleteDoc } from "firebase/firestore";
@@ -43,7 +43,7 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
     setError(null);
     if (user) {
       setEditingUser(user);
-      setFormData(user);
+      setFormData({ ...user, password: '' });
     } else {
       setEditingUser(null);
       setFormData({ name: '', email: '', password: '', role: UserRole.EMPLOYEE, allowedPages: [] });
@@ -52,14 +52,21 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
   };
 
   const handleDelete = async (userId: string) => {
-    if (window.confirm("Tem certeza que deseja remover este colaborador? Ele perderá o acesso imediatamente.")) {
+    const confirmacao = window.confirm(
+      "Atenção: Para apagar totalmente o e-mail do sistema de login, você precisaria acessar o Console do Firebase manualmente. \n\nDeseja remover este colaborador da sua lista de acesso agora?"
+    );
+    
+    if (confirmacao) {
       try {
+        setLoading(true);
+        // Apaga do Firestore (tira o acesso às páginas)
         await deleteDoc(doc(db, "users", userId));
-        // Nota: O Firebase Auth requer lógica de Admin SDK para deletar a conta de login, 
-        // mas deletando do Firestore ele já não consegue mais ver nenhuma aba no seu sistema.
         setStaff(prev => prev.filter(u => u.id !== userId));
+        alert("Colaborador removido com sucesso da base de dados!");
       } catch (e) {
-        alert("Erro ao remover colaborador.");
+        alert("Erro ao remover: " + e);
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -71,55 +78,48 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
     try {
       if (editingUser) {
+        // Atualiza apenas os dados no Firestore
         const updatedUser = { ...editingUser, ...formData } as User;
+        delete (updatedUser as any).password; // Não salva senha no Firestore
+        
         await setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true });
         setStaff(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        setIsModalOpen(false);
       } else {
-        if (!formData.email || !formData.password) {
-          setError("E-mail e senha são obrigatórios.");
-          setLoading(false);
-          return;
+        // Tenta criar no Auth e no Firestore
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, formData.email!, formData.password!);
+          const newUid = userCredential.user.uid;
+
+          const newUser: User = {
+            id: newUid,
+            name: formData.name || '',
+            email: formData.email!,
+            role: UserRole.EMPLOYEE,
+            allowedPages: formData.allowedPages || [],
+            profilePhotoUrl: ''
+          };
+
+          await setDoc(doc(db, "users", newUid), newUser);
+          setStaff(prev => [...prev, newUser]);
+          setIsModalOpen(false);
+        } catch (authError: any) {
+          if (authError.code === 'auth/email-already-in-use') {
+            setError("Este e-mail já existe no sistema de login. Tente usar outro ou recupere a senha.");
+          } else {
+            throw authError;
+          }
         }
-
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        const newUid = userCredential.user.uid;
-
-        const newUser: User = {
-          id: newUid,
-          name: formData.name || '',
-          email: formData.email,
-          role: formData.role || UserRole.EMPLOYEE,
-          allowedPages: formData.allowedPages || [],
-          profilePhotoUrl: ''
-        };
-
-        await setDoc(doc(db, "users", newUid), newUser);
-        setStaff(prev => [...prev, newUser]);
       }
-      setIsModalOpen(false);
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        setError("Este e-mail já está cadastrado no sistema.");
-      } else {
-        setError("Erro: " + err.message);
-      }
+      setError("Erro inesperado: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const togglePage = (pageId: string) => {
-    const currentPages = formData.allowedPages || [];
-    setFormData({
-      ...formData,
-      allowedPages: currentPages.includes(pageId)
-        ? currentPages.filter(id => id !== pageId)
-        : [...currentPages, pageId]
-    });
-  };
-
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-8 pb-20 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Colaboradores</h1>
@@ -134,7 +134,7 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
         {staff.map((member) => (
           <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative">
             <div className="flex items-start justify-between mb-6">
-              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors overflow-hidden">
+              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 overflow-hidden">
                 {member.profilePhotoUrl ? (
                   <img src={member.profilePhotoUrl} className="w-full h-full object-cover" alt="" />
                 ) : (
@@ -167,42 +167,33 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-2xl rounded-[48px] shadow-2xl p-10 space-y-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-black text-slate-800 uppercase">{editingUser ? 'Editar Permissões' : 'Novo Colaborador'}</h2>
+              <h2 className="text-2xl font-black text-slate-800 uppercase">{editingUser ? 'Permissões' : 'Novo Colaborador'}</h2>
               <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all"><X size={20}/></button>
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm font-bold animate-shake">
+              <div className="p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm font-bold">
                 <AlertCircle size={20} /> {error}
               </div>
             )}
 
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome</label>
-                  <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none focus:ring-2 focus:ring-blue-600" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
-                  <input required type="email" placeholder="email@exemplo.com" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none disabled:opacity-50" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
-                </div>
+                <input required placeholder="Nome" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <input required type="email" placeholder="E-mail" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
               </div>
 
               {!editingUser && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
-                  <div className="relative">
-                    <input required type={showPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300 hover:text-slate-600">
-                      {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                    </button>
-                  </div>
+                <div className="relative">
+                  <input required type={showPassword ? "text" : "password"} placeholder="Senha Inicial" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300">
+                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                  </button>
                 </div>
               )}
 
               <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Páginas Autorizadas</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acessos</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {AVAILABLE_PAGES.map(page => (
                     <button
@@ -210,13 +201,10 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
                       type="button"
                       onClick={() => togglePage(page.id)}
                       className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
-                        formData.allowedPages?.includes(page.id) ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'
+                        formData.allowedPages?.includes(page.id) ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-50 bg-slate-50 text-slate-400'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{page.icon}</span>
-                        <span className="font-bold text-xs uppercase tracking-tight">{page.name}</span>
-                      </div>
+                      <span className="font-bold text-xs uppercase">{page.name}</span>
                       {formData.allowedPages?.includes(page.id) && <Check size={16} />}
                     </button>
                   ))}
@@ -224,8 +212,8 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all">
-              {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? '💾 Atualizar Colaborador' : '✨ Criar Acesso'}
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
+              {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? 'Salvar' : 'Criar'}
             </button>
           </form>
         </div>
