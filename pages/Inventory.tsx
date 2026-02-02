@@ -267,25 +267,27 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-        {filteredToys.map(toy => (
-          <div key={toy.id} className="bg-white rounded-[40px] overflow-hidden shadow-sm border border-slate-50 hover:shadow-xl transition-all group">
-            <div className="h-56 md:h-64 overflow-hidden bg-slate-100 relative">
-              <img src={toy.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-4 right-4 px-4 py-2 bg-white/90 backdrop-blur-sm rounded-full">
-                <span className={`text-[10px] font-black uppercase tracking-widest ${
-                  toy.status === ToyStatus.AVAILABLE ? 'text-emerald-500' :
-                  toy.status === ToyStatus.RENTED ? 'text-amber-500' :
-                  'text-red-500'
-                }`}>{toy.status}</span>
+        {filteredToys.map((toy) => (
+          <div key={toy.id} className="bg-white rounded-[40px] border border-slate-100 overflow-hidden hover:shadow-2xl transition-all group flex flex-col">
+            <div className="relative h-48 md:h-56 overflow-hidden bg-slate-50">
+              <img src={toy.imageUrl} alt={toy.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+              <div className="absolute top-4 left-4 flex flex-col gap-2">
+                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg bg-white ${toy.status === ToyStatus.AVAILABLE ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {toy.status}
+                </span>
+                {toy.size && (
+                  <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg bg-blue-600 text-white flex items-center gap-2">
+                    <Maximize size={12}/> {toy.size}
+                  </span>
+                )}
               </div>
-              {toy.size && (
-                <div className="absolute bottom-4 left-4 px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-2xl">
-                  <span className="text-xs font-black uppercase tracking-wide"><Maximize size={14} className="inline mr-1 mb-0.5"/> {toy.size}</span>
-                </div>
-              )}
+              <div className="absolute top-4 right-4 flex flex-col gap-2">
+                 <div className="bg-slate-900/80 text-white px-3 py-1.5 rounded-xl text-[10px] font-black backdrop-blur-sm">
+                    QTD: {toy.quantity}
+                 </div>
+              </div>
             </div>
-            
-            <div className="p-6 md:p-8 flex flex-col h-auto">
+            <div className="p-6 md:p-7 flex-1 flex flex-col">
               <span className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2 block">{toy.category}</span>
               <h3 className="text-lg md:text-xl font-black text-slate-800 mb-2 leading-tight">{toy.name}</h3>
               
