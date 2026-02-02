@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { Plus, Search, Edit3, X, Save, Upload, Trash2, Settings, Maximize } from 'lucide-react';
 import { Toy, ToyStatus, User, UserRole } from '../types';
 import { getFirestore, doc, deleteDoc, setDoc, addDoc, collection } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface InventoryProps {
   toys: Toy[];
@@ -22,6 +21,9 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sua chave API do ImgBB (gratuita) - Pegue em: https://api.imgbb.com/
+  const IMGBB_API_KEY = '1e79854ab10d29dcbf23c6a7f267dd54'; // ⚠️ SUBSTITUA PELA SUA CHAVE
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
@@ -73,9 +75,9 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validar tamanho (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('A imagem deve ter no máximo 5MB');
+      // Validar tamanho (máximo 32MB - limite do ImgBB gratuito)
+      if (file.size > 32 * 1024 * 1024) {
+        alert('A imagem deve ter no máximo 32MB');
         return;
       }
 
@@ -96,19 +98,33 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
     }
   };
 
-  const uploadImageToStorage = async (file: File, toyId: string): Promise<string> => {
-    const storage = getStorage();
-    const fileExtension = file.name.split('.').pop() || 'jpg';
-    const fileName = `toys/${toyId}_${Date.now()}.${fileExtension}`;
-    const storageRef = ref(storage, fileName);
+  const uploadImageToImgBB = async (file: File): Promise<string> => {
+    if (IMGBB_API_KEY === 'SUA_CHAVE_AQUI') {
+      throw new Error('Configure sua chave API do ImgBB primeiro!\nPegue em: https://api.imgbb.com/');
+    }
 
-    setUploadProgress('Enviando imagem...');
-    await uploadBytes(storageRef, file);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    setUploadProgress('Enviando imagem para ImgBB...');
     
-    setUploadProgress('Obtendo URL...');
-    const downloadURL = await getDownloadURL(storageRef);
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha no upload da imagem');
+    }
+
+    const data = await response.json();
     
-    return downloadURL;
+    if (!data.success) {
+      throw new Error(data.error?.message || 'Erro ao fazer upload');
+    }
+
+    setUploadProgress('Imagem enviada com sucesso!');
+    return data.data.url; // URL da imagem hospedada
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -120,16 +136,13 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
     try {
       const db = getFirestore();
       
-      // Gerar ID temporário para novo brinquedo
-      const tempId = editingToy?.id || `toy_${Date.now()}`;
-      
       // Upload da imagem se uma nova foi selecionada
       let imageUrl = formData.imageUrl || '';
       if (selectedImage) {
-        imageUrl = await uploadImageToStorage(selectedImage, tempId);
+        imageUrl = await uploadImageToImgBB(selectedImage);
       }
 
-      setUploadProgress('Salvando dados...');
+      setUploadProgress('Salvando no banco de dados...');
 
       const toyData: Omit<Toy, 'id'> = {
         name: formData.name || 'Sem Nome',
@@ -161,7 +174,7 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
     } catch (error) {
       console.error("Erro ao salvar brinquedo:", error);
       setUploadProgress('');
-      alert(`Erro ao salvar brinquedo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      alert(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsSaving(false);
     }
@@ -304,8 +317,9 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
                     {previewUrl ? (
                       <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                      <div className="w-full h-full flex items-center justify-center text-slate-400 flex-col gap-2">
                         <Upload size={48} />
+                        <p className="text-xs font-bold">Clique para adicionar foto</p>
                       </div>
                     )}
                     <button 
