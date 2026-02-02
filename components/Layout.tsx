@@ -19,21 +19,23 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onUpdateUser 
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  // --- CORREÇÃO AQUI: FILTRO DE ACESSO ---
+  // --- LÓGICA DE FILTRO CORRIGIDA ---
   const filteredMenuItems = MENU_ITEMS.filter(item => {
-    // Se não houver usuário, não mostra nada
+    // 1. Se não houver usuário, não mostra nada
     if (!user) return false;
 
-    // Se for ADMIN, tem acesso a tudo
+    // 2. Se for ADMINISTRADOR, mostra absolutamente tudo
     if (user.role === UserRole.ADMIN) return true;
 
-    // Se for COLABORADOR:
-    // 1. Não mostra o que é exclusivo de Admin (como Staff ou Configurações)
+    // 3. Se for COLABORADOR:
+    // Primeiro, removemos o que for marcado estritamente como adminOnly (como Configurações/Staff)
     if (item.adminOnly) return false;
 
-    // 2. Verifica se o ID da página está na lista de autorizados do colaborador
-    // O 'item.id' deve corresponder ao que salvamos em 'allowedPages' (ex: 'rentals', 'toys')
-    return user.allowedPages?.includes(item.id || '');
+    // Segundo, verificamos se o ID do item do menu está na lista de páginas liberadas
+    // IMPORTANTE: O 'item.id' no constants.ts deve bater com o 'id' usado no Staff.tsx
+    const hasPermission = user.allowedPages?.includes(item.id || '');
+    
+    return hasPermission;
   });
 
   const handlePhotoClick = () => {
@@ -84,7 +86,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onUpdateUser 
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-[2px] mb-1">
             {user?.role === UserRole.ADMIN ? 'Administrador' : 'Colaborador'}
           </p>
-          <h3 className="text-lg font-black text-slate-800">{user?.name}</h3>
+          <h3 className="text-lg font-black text-slate-800 text-center px-4">{user?.name}</h3>
         </div>
 
         <nav className="flex-1 px-6 py-6 space-y-2 overflow-y-auto custom-scrollbar">
@@ -110,7 +112,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onUpdateUser 
             className="w-full flex items-center justify-center space-x-3 px-4 py-4 rounded-2xl text-red-500 bg-red-50 font-black text-[10px] uppercase tracking-widest hover:bg-red-100 transition-all"
           >
             <LogOut size={18} />
-            <span>Sair do Sistema</span>
+            <span>Sair</span>
           </button>
         </div>
       </aside>
