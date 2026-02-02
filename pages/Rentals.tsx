@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, List, CalendarDays, BarChart3, Clock, CheckCircle2, MapPin, UserPlus, FileSpreadsheet, Download, Phone, Share2, MessageCircle, Trash2, ClipboardList, Filter, DollarSign } from 'lucide-react';
 import { Rental, RentalStatus, Customer, Toy, User, UserRole, PaymentMethod } from '../types';
+import { getFirestore, deleteDoc, doc } from "firebase/firestore";
 
+const db = getFirestore();
 interface RentalsProps {
   rentals: Rental[];
   setRentals: React.Dispatch<React.SetStateAction<Rental[]>>;
@@ -265,14 +267,24 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     } : r));
   };
 
-  const handleDeleteRental = (id: string) => {
-    if (!confirm("Tem certeza que deseja APAGAR esta reserva permanentemente? Esta ação não pode ser desfeita.")) return;
+  // ✅ VERSÃO CORRIGIDA (FUNCIONA)
+const handleDeleteRental = async (id: string) => {
+  if (!confirm("Tem certeza que deseja APAGAR esta reserva permanentemente? Esta ação não pode ser desfeita.")) return;
+  
+  try {
+    // Deleta do Firebase
+    await deleteDoc(doc(db, "rentals", id));
+    
+    // Remove do estado local (já será atualizado pelo onSnapshot, mas fazemos para resposta imediata)
     setRentals(prev => prev.filter(r => r.id !== id));
-  };
-
+  } catch (error) {
+    console.error("Erro ao excluir reserva:", error);
+    alert("Erro ao excluir a reserva. Tente novamente.");
+  }
+};
   const handleSendWhatsApp = (rental: Rental) => {
     const customer = customers.find(c => c.id === rental.customerId);
-    if (!customer?.phone) return alert("Cliente sem telefone cadastrado.");
+    if (!customer?.phone) return alert("21970386065.");
     
     const toysNames = toys.filter(t => rental.toyIds.includes(t.id)).map(t => t.name + ' (' + (t.size || 'Unico') + ')').join(', ');
     const formattedDate = new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR');
