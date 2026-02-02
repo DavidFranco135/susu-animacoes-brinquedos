@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ExternalLink, Star, Package, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Search, ExternalLink, Star, Package, MessageCircle, ArrowLeft, Maximize, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Toy, ToyStatus, CompanySettings } from './types';
 import { useNavigate } from 'react-router-dom';
 // ✅ ADICIONAR:
@@ -13,6 +13,10 @@ const PublicCatalog: React.FC = () => {
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  
+  // Estados para visualização de álbum
+  const [viewingAlbum, setViewingAlbum] = useState<Toy | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     // Carrega brinquedos em tempo real
@@ -53,6 +57,43 @@ const PublicCatalog: React.FC = () => {
       `Olá! Gostaria de solicitar um orçamento para: *${toyName}*`
     );
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+  };
+
+  // Funções para gerenciar o álbum de fotos
+  const getToyImages = (toy: Toy): string[] => {
+    if (toy.images && toy.images.length > 0) {
+      return toy.images;
+    }
+    return toy.imageUrl ? [toy.imageUrl] : [];
+  };
+
+  const getToyMainImage = (toy: Toy): string => {
+    if (toy.images && toy.images.length > 0) {
+      return toy.images[0];
+    }
+    return toy.imageUrl || 'https://images.unsplash.com/photo-1533749047139-189de3cf06d3?auto=format&fit=crop&q=80&w=400';
+  };
+
+  const openAlbumViewer = (toy: Toy) => {
+    setViewingAlbum(toy);
+    setCurrentImageIndex(0);
+  };
+
+  const closeAlbumViewer = () => {
+    setViewingAlbum(null);
+    setCurrentImageIndex(0);
+  };
+
+  const nextImage = () => {
+    if (!viewingAlbum) return;
+    const images = getToyImages(viewingAlbum);
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    if (!viewingAlbum) return;
+    const images = getToyImages(viewingAlbum);
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
   return (
@@ -129,10 +170,17 @@ const PublicCatalog: React.FC = () => {
               {/* Imagem */}
               <div className="relative h-64 bg-slate-100 overflow-hidden">
                 <img
-                  src={toy.imageUrl}
+                  src={getToyMainImage(toy)}
                   alt={toy.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 cursor-pointer"
+                  onClick={() => openAlbumViewer(toy)}
                 />
+                {getToyImages(toy).length > 1 && (
+                  <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                    <Maximize size={12} />
+                    {getToyImages(toy).length} fotos
+                  </div>
+                )}
                 <div className="absolute top-4 right-4">
                   <span
                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
@@ -199,6 +247,87 @@ const PublicCatalog: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Modal de Visualização de Álbum */}
+      {viewingAlbum && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+          <button 
+            onClick={closeAlbumViewer}
+            className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+          >
+            <X size={24} />
+          </button>
+          
+          <div className="relative w-full max-w-4xl">
+            {getToyImages(viewingAlbum).length > 1 && (
+              <>
+                <button
+                  onClick={prevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+                >
+                  <ChevronLeft size={32} />
+                </button>
+                <button
+                  onClick={nextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+                >
+                  <ChevronRight size={32} />
+                </button>
+              </>
+            )}
+            
+            <div className="bg-slate-900 rounded-3xl overflow-hidden">
+              <img
+                src={getToyImages(viewingAlbum)[currentImageIndex]}
+                alt={`${viewingAlbum.name} - Foto ${currentImageIndex + 1}`}
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+              
+              <div className="p-6 text-white">
+                <h3 className="text-2xl font-black mb-2">{viewingAlbum.name}</h3>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-300">
+                    Foto {currentImageIndex + 1} de {getToyImages(viewingAlbum).length}
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <p className="text-xl font-bold text-blue-400">
+                      R$ {viewingAlbum.price.toLocaleString('pt-BR')}
+                    </p>
+                    <button
+                      onClick={() => handleWhatsAppClick(viewingAlbum.name)}
+                      className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all"
+                    >
+                      <MessageCircle size={14} /> Pedir Orçamento
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {getToyImages(viewingAlbum).length > 1 && (
+              <div className="flex gap-2 justify-center mt-4 overflow-x-auto pb-2">
+                {getToyImages(viewingAlbum).map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentImageIndex(idx)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                      idx === currentImageIndex 
+                        ? 'border-blue-500 ring-2 ring-blue-500/50' 
+                        : 'border-white/30 hover:border-white/60'
+                    }`}
+                  >
+                    <img
+                      src={img}
+                      alt={`Miniatura ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-100 mt-20">
