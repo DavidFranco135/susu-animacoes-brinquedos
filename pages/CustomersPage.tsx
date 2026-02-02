@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Users, Plus, Search, Edit, Trash2, X, Building2, Download } from 'lucide-react';
 import { Customer, User } from '../types';
+import { getFirestore, deleteDoc, doc } from "firebase/firestore";
 
+const db = getFirestore();
 interface Props {
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
@@ -141,11 +143,21 @@ const CustomersPage: React.FC<Props> = ({ customers, setCustomers }) => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-      if(confirm("Deseja realmente excluir este cliente?")) {
-          setCustomers(prev => prev.filter(c => c.id !== id));
-      }
-  };
+ // ✅ VERSÃO CORRIGIDA (FUNCIONA)
+const handleDelete = async (id: string) => {
+  if (!confirm("Deseja realmente excluir este cliente?")) return;
+  
+  try {
+    // Deleta do Firebase
+    await deleteDoc(doc(db, "customers", id));
+    
+    // Remove do estado local (já será atualizado pelo onSnapshot, mas fazemos para resposta imediata)
+    setCustomers(prev => prev.filter(c => c.id !== id));
+  } catch (error) {
+    console.error("Erro ao excluir cliente:", error);
+    alert("Erro ao excluir o cliente. Tente novamente.");
+  }
+};
 
   return (
     <div className="space-y-6">
