@@ -19,6 +19,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const profileInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
 
+  // Função genérica para processar imagem para Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
     const file = e.target.files?.[0];
     if (file) {
@@ -42,15 +43,17 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
     setIsSaving(true);
     
     try {
-      // Salva os dados da empresa (Logo e Login Bg)
+      // 1. Salva os dados da empresa (incluindo logo e fundo de login)
       await setCompany(companyData);
-      // Salva os dados do usuário (Foto de Perfil)
+      
+      // 2. Salva os dados do usuário (CORREÇÃO: agora salva a foto de perfil no Firebase)
       await onUpdateUser(userData);
       
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
-      alert("Erro ao salvar configurações.");
+      console.error("Erro ao salvar:", error);
+      alert("Erro ao salvar as configurações.");
     } finally {
       setIsSaving(false);
     }
@@ -77,6 +80,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-10">
+          
           {/* DADOS DA EMPRESA */}
           <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
@@ -89,16 +93,16 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Fantasia</label>
-                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 focus:ring-2 focus:ring-blue-500/20 font-bold" value={companyData.name} onChange={e => setCompanyData({...companyData, name: e.target.value})} />
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.name} onChange={e => setCompanyData({...companyData, name: e.target.value})} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
-                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 focus:ring-2 focus:ring-blue-500/20 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
               </div>
             </div>
           </section>
 
-          {/* PERFIL DO USUÁRIO */}
+          {/* PERFIL DO USUÁRIO (Foto corrigida) */}
           <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
               <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
@@ -125,12 +129,12 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Seu Nome</label>
-                    <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 focus:ring-2 focus:ring-blue-500/20 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
+                    <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail de Acesso</label>
-                    <div className="w-full px-6 py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 flex items-center gap-3">
-                      <Mail size={18}/> {userData.email}
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+                    <div className="w-full px-6 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 flex items-center gap-2">
+                      <Mail size={16} /> {userData.email}
                     </div>
                   </div>
                </div>
@@ -138,7 +142,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
           </section>
         </div>
 
-        {/* LOGOS E LOGIN */}
         <div className="space-y-8">
           {/* LOGOMARCA */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
@@ -155,11 +158,10 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
               </div>
               <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'logo')} />
             </div>
-            <h3 className="font-black text-slate-800 uppercase tracking-tight">Logomarca Oficial</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[2px] mt-2">Aparece nos Contratos e Recibos</p>
+            <h3 className="font-black text-slate-800 uppercase tracking-tight">Logomarca</h3>
           </section>
 
-          {/* IMAGEM DA TELA DE LOGIN */}
+          {/* NOVO: FOTO DA TELA DE LOGIN */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
             <div onClick={() => loginInputRef.current?.click()} className="relative w-full h-32 mb-6 group cursor-pointer">
               <div className="w-full h-full rounded-[32px] bg-slate-50 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
@@ -175,7 +177,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
               <input type="file" ref={loginInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'login')} />
             </div>
             <h3 className="font-black text-slate-800 uppercase tracking-tight">Fundo do Login</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[2px] mt-2">Personalize a tela de entrada</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-2">Imagem de fundo da tela inicial</p>
           </section>
         </div>
       </div>
