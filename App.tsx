@@ -113,7 +113,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [rentals, setRentals] = useState<Rental[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-  const [staff, setStaff] = useState<User[]>([]); // ESTADO ADICIONADO
+  const [staff, setStaff] = useState<User[]>([]);
   const [categories, setCategories] = useState<string[]>(['Infláveis', 'Animação / Recreação', 'Eletrônicos', 'Mesa/Jogos', 'Cama Elástica', 'Espaço Kids', 'Outros']);
   const [company, setCompany] = useState<CompanyType>({
     name: 'SUSU Animações e Brinquedos LTDA',
@@ -137,7 +137,8 @@ const App: React.FC = () => {
               id: firebaseUser.uid,
               name: firebaseUser.email?.split('@')[0] || 'Usuário',
               email: firebaseUser.email || '',
-              role: firebaseUser.email === 'admsusu@gmail.com' ? UserRole.ADMIN : UserRole.EMPLOYEE
+              role: firebaseUser.email === 'admsusu@gmail.com' ? UserRole.ADMIN : UserRole.EMPLOYEE,
+              allowedPages: []
             };
             setDoc(userDocRef, userData);
           }
@@ -180,7 +181,6 @@ const App: React.FC = () => {
       if (docSnap.exists()) setCategories(docSnap.data().list || []);
     });
 
-    // LISTENER DE STAFF ADICIONADO
     const unsubStaff = onSnapshot(collection(db, "users"), (snap) => {
       setStaff(snap.docs.map(d => ({ ...d.data(), id: d.id } as User)));
     });
@@ -217,7 +217,8 @@ const App: React.FC = () => {
           !user ? <Login /> : (
             <Layout user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser}>
               <Routes>
-                <Route path="/" element={user.role === UserRole.ADMIN ? <Dashboard rentals={rentals} toysCount={toys.length} transactions={transactions} /> : <Navigate to="/reservas" />} />
+                {/* Dashboard: Admin ou quem tem permissão explícita */}
+                <Route path="/" element={user.role === UserRole.ADMIN || user.allowedPages?.includes('dashboard') ? <Dashboard rentals={rentals} toysCount={toys.length} transactions={transactions} /> : <Navigate to="/reservas" />} />
                 
                 <Route path="/reservas" element={
                   <Rentals 
@@ -232,35 +233,55 @@ const App: React.FC = () => {
                   />
                 } />
                
-               {/* ROTA DE BRINQUEDOS CORRIGIDA PARA COLABORADORES */}
-<Route path="/brinquedos" element={
-  user.role === UserRole.ADMIN || user.allowedPages?.includes('toys') ? (
-    <Inventory 
-      toys={toys} 
-      setToys={(action: any) => {
-        const next = typeof action === 'function' ? action(toys) : action;
-        // Salva no Firebase
-        next.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t));
-      }} 
-      categories={categories} 
-      setCategories={(cats) => setDoc(doc(db, "settings", "categories"), { list: cats })} 
-    />
-  ) : (
-    <Navigate to="/reservas" />
-  )
-} />
+                {/* CORREÇÃO: Brinquedos liberado para Admin ou allowedPages 'toys' */}
+                <Route path="/brinquedos" element={
+                  user.role === UserRole.ADMIN || user.allowedPages?.includes('toys') ? (
+                    <Inventory 
+                      toys={toys} 
+                      setToys={(action: any) => {
+                        const next = typeof action === 'function' ? action(toys) : action;
+                        next.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t));
+                      }} 
+                      categories={categories} 
+                      setCategories={(cats) => setDoc(doc(db, "settings", "categories"), { list: cats })} 
+                    />
+                  ) : <Navigate to="/reservas" />
+                } />
+
+                {/* CORREÇÃO: Clientes liberado para Admin ou allowedPages 'customers' */}
+                <Route path="/clientes" element={
+                  user.role === UserRole.ADMIN || user.allowedPages?.includes('customers') ? (
+                    <CustomersPage 
+                      customers={customers} 
+                      setCustomers={(action: any) => {
+                          const next = typeof action === 'function' ? action(customers) : action;
+                          next.forEach((c: Customer) => setDoc(doc(db, "customers", c.id), c));
+                      }} 
+                    />
+                  ) : <Navigate to="/reservas" />
+                } />
 
                 <Route path="/disponibilidade" element={<Availability rentals={rentals} toys={toys} />} />
                 
-                <Route path="/orcamentos" element={<BudgetsPage rentals={rentals} setRentals={(action: any) => {
+                {/* CORREÇÃO: Orçamentos liberado para Admin ou allowedPages 'budgets' */}
+                <Route path="/orcamentos" element={
+                   user.role === UserRole.ADMIN || user.allowedPages?.includes('budgets') ? (
+                  <BudgetsPage rentals={rentals} setRentals={(action: any) => {
                     const next = typeof action === 'function' ? action(rentals) : action;
                     next.forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r));
-                }} customers={customers} toys={toys} company={company} />} />
+                }} customers={customers} toys={toys} company={company} />
+                ) : <Navigate to="/reservas" />
+                } />
 
-                <Route path="/financeiro" element={user.role === UserRole.ADMIN ? <Financial rentals={rentals} setRentals={()=>{}} transactions={transactions} setTransactions={(action: any) => {
-                    const next = typeof action === 'function' ? action(transactions) : action;
-                    next.forEach((t: FinancialTransaction) => setDoc(doc(db, "transactions", t.id), t));
-                }} /> : <Navigate to="/reservas" />} />
+                {/* CORREÇÃO: Financeiro liberado para Admin ou allowedPages 'financial' */}
+                <Route path="/financeiro" element={
+                  user.role === UserRole.ADMIN || user.allowedPages?.includes('financial') ? (
+                    <Financial rentals={rentals} setRentals={()=>{}} transactions={transactions} setTransactions={(action: any) => {
+                        const next = typeof action === 'function' ? action(transactions) : action;
+                        next.forEach((t: FinancialTransaction) => setDoc(doc(db, "transactions", t.id), t));
+                    }} />
+                  ) : <Navigate to="/reservas" />
+                } />
                 
                 <Route path="/contratos" element={<DocumentsPage type="contract" rentals={rentals} customers={customers} company={company} />} />
                 <Route path="/recibos" element={<DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company} />} />
@@ -272,13 +293,11 @@ const App: React.FC = () => {
                       setStaff={(action: any) => {
                         const nextStaff = typeof action === 'function' ? action(staff) : action;
                         
-                        // Deleta se alguém foi removido
                         if (nextStaff.length < staff.length) {
                           const removed = staff.find(u => !nextStaff.find(n => n.id === u.id));
                           if (removed) deleteDoc(doc(db, "users", removed.id));
                         }
 
-                        // Salva/Atualiza
                         nextStaff.forEach((u: User) => setDoc(doc(db, "users", u.id), u));
                       }} 
                     />
