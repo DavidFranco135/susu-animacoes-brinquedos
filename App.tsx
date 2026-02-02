@@ -232,17 +232,26 @@ const App: React.FC = () => {
                     toys={toys} 
                   />
                 } />
-                <Route path="/brinquedos" element={
-                  <Inventory 
-                    toys={toys} 
-                    setToys={(action: any) => {
-                        const next = typeof action === 'function' ? action(toys) : action;
-                        next.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t));
-                    }} 
-                    categories={categories} 
-                    setCategories={handleUpdateCategories} 
-                  />
-                } />
+               
+<Route path="/estoque" element={
+  user.role === UserRole.ADMIN ? (
+    <Inventory 
+      toys={toys} 
+      setToys={(action: any) => {
+        const next = typeof action === 'function' ? action(toys) : action;
+        setToys(next); // Atualiza o estado local
+        // Salva no Firebase
+        next.forEach((t: Toy) => {
+          setDoc(doc(db, "toys", t.id), t);
+        });
+      }} 
+      categories={categories} 
+      setCategories={setCategories} 
+    />
+  ) : (
+    <Navigate to="/reservas" />
+  )
+} />
                 <Route path="/clientes" element={
                   <CustomersPage 
                     customers={customers} 
