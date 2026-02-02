@@ -32,7 +32,20 @@ import PublicRentalSummary from './pages/PublicRentalSummary';
 import { Customer, Toy, Rental, User, UserRole, FinancialTransaction, CompanySettings as CompanyType } from './types';
 import { Loader2 } from 'lucide-react';
 
-// ... (firebaseConfig mantido igual)
+// Configuração do Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyBUvwY-e7h0KZyFJv7n0ignpzlMUGJIurU",
+  authDomain: "niklaus-b2b.firebaseapp.com",
+  projectId: "niklaus-b2b",
+  storageBucket: "niklaus-b2b.appspot.com",
+  messagingSenderId: "367332768565",
+  appId: "1:367332768565:web:2f03f3747d337257917246"
+};
+
+// INICIALIZAÇÃO OBRIGATÓRIA DO FIREBASE
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -45,17 +58,13 @@ const App: React.FC = () => {
   const [company, setCompany] = useState<CompanyType | null>(null);
   const [categories, setCategories] = useState<string[]>(['Geral', 'Infláveis', 'Eletrônicos', 'Jogos']);
 
-  const auth = getAuth();
-  const db = getFirestore();
-
-  // Efeito de Autenticação e Dados (Mantido original)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await doc(db, "users", firebaseUser.uid);
-        onSnapshot(userDoc, (doc) => {
-          if (doc.exists()) {
-            setUser(doc.data() as User);
+        const userDoc = doc(db, "users", firebaseUser.uid);
+        onSnapshot(userDoc, (docSnap) => {
+          if (docSnap.exists()) {
+            setUser(docSnap.data() as User);
           }
           setLoading(false);
         });
@@ -65,7 +74,6 @@ const App: React.FC = () => {
       }
     });
 
-    // Listeners do Firestore (Mantido original)
     const qToys = query(collection(db, "toys"));
     onSnapshot(qToys, (s) => setToys(s.docs.map(d => ({ ...d.data() as Toy, id: d.id }))));
     
@@ -90,6 +98,13 @@ const App: React.FC = () => {
   const handleUpdateUser = (u: User) => setDoc(doc(db, "users", u.id), u);
   const handleUpdateCompany = (c: CompanyType) => setDoc(doc(db, "settings", "company"), c);
 
+  // Função para validar acesso às rotas
+  const hasAccess = (pageId: string) => {
+    if (!user) return false;
+    if (user.role === UserRole.ADMIN) return true;
+    return user.allowedPages?.includes(pageId);
+  };
+
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-blue-600" size={40} />
@@ -105,26 +120,31 @@ const App: React.FC = () => {
           !user ? <Navigate to="/login" /> : (
             <Layout user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser}>
               <Routes>
-                {/* LÓGICA DE ACESSO CORRIGIDA ABAIXO */}
-                <Route path="/" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('dashboard')) ? <Dashboard toys={toys} rentals={rentals} transactions={transactions} /> : <Navigate to="/reservas" />} />
+                {/* Dashboard: ID 'dashboard' */}
+                <Route path="/" element={hasAccess('dashboard') ? <Dashboard toys={toys} rentals={rentals} transactions={transactions} /> : <Navigate to="/reservas" />} />
                 
-                <Route path="/estoque" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('toys')) ? <Inventory toys={toys} setToys={setToys} categories={categories} setCategories={setCategories} /> : <Navigate to="/reservas" />} />
+                {/* Estoque: ID 'toys' (conforme Staff.tsx) */}
+                <Route path="/estoque" element={hasAccess('toys') ? <Inventory toys={toys} setToys={setToys} categories={categories} setCategories={setCategories} /> : <Navigate to="/reservas" />} />
                 
-                <Route path="/reservas" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('rentals')) ? <Rentals rentals={rentals} setRentals={() => {}} toys={toys} customers={customers} /> : <Navigate to="/login" />} />
+                {/* Reservas: ID 'rentals' */}
+                <Route path="/reservas" element={hasAccess('rentals') ? <Rentals rentals={rentals} setRentals={() => {}} toys={toys} customers={customers} /> : <Navigate to="/login" />} />
                 
                 <Route path="/disponibilidade" element={<Availability toys={toys} rentals={rentals} />} />
                 
-                <Route path="/financeiro" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('financial')) ? <Financial transactions={transactions} rentals={rentals} /> : <Navigate to="/reservas" />} />
+                {/* Financeiro: ID 'financial' */}
+                <Route path="/financeiro" element={hasAccess('financial') ? <Financial transactions={transactions} rentals={rentals} /> : <Navigate to="/reservas" />} />
                 
-                <Route path="/clientes" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('customers')) ? <CustomersPage customers={customers} rentals={rentals} /> : <Navigate to="/reservas" />} />
+                {/* Clientes: ID 'customers' */}
+                <Route path="/clientes" element={hasAccess('customers') ? <CustomersPage customers={customers} rentals={rentals} /> : <Navigate to="/reservas" />} />
                 
-                <Route path="/orcamentos" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('budgets')) ? <BudgetsPage rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
+                {/* Orçamentos: ID 'budgets' */}
+                <Route path="/orcamentos" element={hasAccess('budgets') ? <BudgetsPage rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
                 
-                <Route path="/contratos" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('documents')) ? <DocumentsPage type="contract" rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
-                
-                <Route path="/recibos" element={(user.role === UserRole.ADMIN || user.allowedPages?.includes('documents')) ? <DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
+                {/* Documentos: ID 'documents' */}
+                <Route path="/contratos" element={hasAccess('documents') ? <DocumentsPage type="contract" rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
+                <Route path="/recibos" element={hasAccess('documents') ? <DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
 
-                {/* Páginas exclusivas de Admin */}
+                {/* Páginas restritas ao Administrador */}
                 <Route path="/colaboradores" element={user.role === UserRole.ADMIN ? <Staff staff={staff.filter(u => u.email !== 'admsusu@gmail.com')} setStaff={(a: any) => { 
                   const n = typeof a === 'function' ? a(staff) : a; 
                   if (n.length < staff.length) { 
