@@ -398,7 +398,7 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
               </div>
               <div className="flex items-center justify-between pt-3 md:pt-4 border-t border-slate-100">
                 <div>
-                  <p className="text-[10px] md:text-xs text-slate-400 font-black uppercase mb-1">Valor</p>
+                  <p className="text-[10px] md:text-xs text-slate-400 font-black uppercase mb-1">Valor a partir de:</p>
                   <p className="text-xl md:text-2xl font-black text-blue-600">R$ {toy.price.toFixed(2)}</p>
                 </div>
                 {isAdmin && (
