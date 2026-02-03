@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
 import { CompanySettings, User } from '../types';
-import { auth } from '../firebase';
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut } from 'firebase/auth';
 
 interface Props {
   company: CompanySettings;
@@ -16,13 +14,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const [userData, setUserData] = useState<User>(user);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  
-  // Estados para alteração de email/senha
-  const [isChangingCredentials, setIsChangingCredentials] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
@@ -68,116 +59,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
     }
   };
 
-  // ✅ NOVA FUNÇÃO: Alterar Email e Senha
-  const handleChangeCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!currentPassword) {
-      alert("Por favor, digite sua senha atual para confirmar a alteração.");
-      return;
-    }
-
-    if (newPassword && newPassword !== confirmPassword) {
-      alert("A nova senha e a confirmação não coincidem.");
-      return;
-    }
-
-    if (newPassword && newPassword.length < 6) {
-      alert("A nova senha deve ter no mínimo 6 caracteres.");
-      return;
-    }
-
-    // Se não tem email nem senha para alterar
-    if (!newEmail && !newPassword) {
-      alert("Por favor, preencha o novo email e/ou a nova senha.");
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser || !currentUser.email) {
-        alert("Usuário não autenticado.");
-        setIsSaving(false);
-        return;
-      }
-
-      // Importar setDoc e doc do Firebase
-      const { setDoc, doc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-
-      // Reautentica o usuário com a senha atual
-      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
-      await reauthenticateWithCredential(currentUser, credential);
-
-      let successMessage = "";
-
-      // Atualiza a senha primeiro (se fornecida)
-      if (newPassword) {
-        await updatePassword(currentUser, newPassword);
-        successMessage = "Senha atualizada com sucesso!";
-      }
-
-      // Atualiza o email se foi fornecido (APENAS se for diferente do atual)
-      if (newEmail && newEmail !== currentUser.email) {
-        // 1. Atualiza o email no documento do usuário
-        await onUpdateUser({ ...userData, email: newEmail });
-        
-        // 2. Atualiza o email admin no settings (para manter as permissões de admin)
-        await setDoc(doc(db, "settings", "admin"), { email: newEmail });
-        
-        // 3. Tenta atualizar no Firebase Authentication (pode dar erro, mas está tudo bem)
-        try {
-          await updateEmail(currentUser, newEmail);
-          successMessage = successMessage 
-            ? "Email e senha atualizados com sucesso! Você continuará como ADMIN. Faça logout e login novamente com o novo email."
-            : "Email atualizado com sucesso! Você continuará como ADMIN. Faça logout e login novamente com o novo email.";
-        } catch (emailError: any) {
-          // Se der erro ao atualizar email no Auth, ainda está tudo certo no sistema
-          console.log("Aviso ao atualizar email no Auth:", emailError);
-          successMessage = successMessage 
-            ? "Senha atualizada! O email foi salvo no sistema e você continuará como ADMIN. Para fazer login, use o NOVO email e a NOVA senha."
-            : "Email salvo no sistema! Você continuará como ADMIN. Para fazer login, use o NOVO email e a senha atual.";
-        }
-      }
-
-      alert(successMessage || "Alterações salvas com sucesso!");
-      
-      // Limpa os campos
-      setCurrentPassword('');
-      setNewEmail('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setIsChangingCredentials(false);
-      
-      // Se alterou email ou senha, faz logout automático
-      if (newEmail || newPassword) {
-        alert("Fazendo logout para você entrar com as novas credenciais...");
-        setTimeout(() => {
-          signOut(auth);
-        }, 2000);
-      }
-      
-    } catch (error: any) {
-      console.error("Erro ao alterar credenciais:", error);
-      
-      if (error.code === 'auth/wrong-password') {
-        alert("Senha atual incorreta.");
-      } else if (error.code === 'auth/email-already-in-use') {
-        alert("Este email já está em uso por outra conta.");
-      } else if (error.code === 'auth/invalid-email') {
-        alert("Email inválido.");
-      } else if (error.code === 'auth/requires-recent-login') {
-        alert("Por segurança, faça logout e login novamente antes de alterar o email.");
-      } else {
-        alert("Erro ao alterar credenciais: " + error.message);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-10 pb-32">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -218,19 +99,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
                 <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone (WhatsApp)</label>
-                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.phone || ''} onChange={e => setCompanyData({...companyData, phone: e.target.value})} placeholder="(21) 00000-0000" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Comercial</label>
-                <input type="email" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.email || ''} onChange={e => setCompanyData({...companyData, email: e.target.value})} placeholder="contato@empresa.com" />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Completo</label>
-              <textarea rows={2} className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold resize-none" value={companyData.address || ''} onChange={e => setCompanyData({...companyData, address: e.target.value})} placeholder="Rua, número, complemento, bairro, cidade - UF, CEP" />
             </div>
           </section>
 
@@ -271,128 +139,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                   </div>
                </div>
             </div>
-          </section>
-
-          {/* ✅ NOVA SEÇÃO: ALTERAR EMAIL E SENHA */}
-          <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
-                  <Lock size={24} />
-                </div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Segurança</h2>
-              </div>
-              
-              {!isChangingCredentials && (
-                <button
-                  onClick={() => setIsChangingCredentials(true)}
-                  className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
-                >
-                  <Key size={16} className="inline mr-2" /> Alterar Email/Senha
-                </button>
-              )}
-            </div>
-
-            {isChangingCredentials ? (
-              <form onSubmit={handleChangeCredentials} className="space-y-6">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-                  <p className="text-xs font-bold text-amber-800">
-                    ⚠️ Por segurança, você precisa confirmar sua senha atual para fazer alterações.
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Atual *</label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                    value={currentPassword}
-                    onChange={e => setCurrentPassword(e.target.value)}
-                    placeholder="Digite sua senha atual"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Novo Email (Opcional)</label>
-                    <input 
-                      type="email" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
-                      placeholder="novo@email.com"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Senha (Opcional)</label>
-                    <input 
-                      type="password" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                  </div>
-                </div>
-
-                {newPassword && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirmar Nova Senha</label>
-                    <input 
-                      type="password" 
-                      required
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="Digite novamente"
-                    />
-                  </div>
-                )}
-
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
-                  <p className="text-xs font-bold text-blue-800">
-                    🔐 Você continuará como ADMIN mesmo após alterar o email!
-                  </p>
-                  <p className="text-xs text-blue-600 mt-2">
-                    Após a alteração, faça logout e entre com as novas credenciais.
-                  </p>
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50"
-                  >
-                    {isSaving ? 'Processando...' : 'Confirmar Alteração'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsChangingCredentials(false);
-                      setCurrentPassword('');
-                      setNewEmail('');
-                      setNewPassword('');
-                      setConfirmPassword('');
-                    }}
-                    className="bg-slate-100 text-slate-600 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-400 font-bold text-sm">
-                  Email atual: <span className="text-slate-800">{userData.email}</span>
-                </p>
-                <p className="text-slate-300 font-bold text-xs mt-2">
-                  Senha: ••••••••
-                </p>
-              </div>
-            )}
           </section>
         </div>
 
