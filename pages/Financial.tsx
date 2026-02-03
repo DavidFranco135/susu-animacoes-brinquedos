@@ -282,6 +282,16 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
           >
             <Download size={18} className="inline mr-2"/> {isGeneratingPDF ? 'Gerando...' : 'Exportar PDF'}
           </button>
+          <button 
+            className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl shadow-emerald-100 hover:scale-105 transition-all"
+          >
+            <ArrowUpCircle size={18} className="inline mr-2"/> Nova Receita
+          </button>
+          <button 
+            className="bg-gradient-to-br from-rose-500 to-rose-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl shadow-rose-100 hover:scale-105 transition-all"
+          >
+            <ArrowDownCircle size={18} className="inline mr-2"/> Nova Despesa
+          </button>
         </div>
       </header>
 
