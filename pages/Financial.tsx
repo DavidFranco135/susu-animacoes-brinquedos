@@ -4,7 +4,7 @@ import {
   ArrowUpCircle, ArrowDownCircle,
   BarChart3, Download, PieChart as PieChartIcon,
   Activity, TrendingDown as TrendingDownIcon,
-  Trash2
+  Trash2, X
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { Rental, FinancialTransaction, User } from '../types';
 import { db } from '../firebase';
-import { deleteDoc, doc } from "firebase/firestore";
+import { deleteDoc, doc, setDoc } from "firebase/firestore";
 
 interface FinancialProps {
   rentals: Rental[];
@@ -29,6 +29,14 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
   const [currentDate] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState<'Receitas' | 'Despesas' | 'Lucro' | 'AReceber'>('Lucro');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
+  const [formData, setFormData] = useState({
+    description: '',
+    value: '',
+    date: new Date().toISOString().split('T')[0],
+    category: ''
+  });
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
@@ -194,6 +202,40 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
     }
   };
 
+  const handleOpenModal = (type: 'INCOME' | 'EXPENSE') => {
+    setModalType(type);
+    setFormData({
+      description: '',
+      value: '',
+      date: new Date().toISOString().split('T')[0],
+      category: ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newTransaction: FinancialTransaction = {
+      id: `t${Date.now()}`,
+      type: modalType,
+      description: formData.description,
+      value: Number(formData.value),
+      date: formData.date,
+      category: formData.category || 'Outros',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, "transactions", newTransaction.id), newTransaction);
+      setTransactions((prev: FinancialTransaction[]) => [...prev, newTransaction]);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao salvar transação:", error);
+      alert("Erro ao salvar a transação. Tente novamente.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-12">
@@ -283,11 +325,13 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
             <Download size={18} className="inline mr-2"/> {isGeneratingPDF ? 'Gerando...' : 'Exportar PDF'}
           </button>
           <button 
+            onClick={() => handleOpenModal('INCOME')}
             className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl shadow-emerald-100 hover:scale-105 transition-all"
           >
             <ArrowUpCircle size={18} className="inline mr-2"/> Nova Receita
           </button>
           <button 
+            onClick={() => handleOpenModal('EXPENSE')}
             className="bg-gradient-to-br from-rose-500 to-rose-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl shadow-rose-100 hover:scale-105 transition-all"
           >
             <ArrowDownCircle size={18} className="inline mr-2"/> Nova Despesa
@@ -461,6 +505,80 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
           </tbody>
         </table>
       </div>
+
+      {/* Modal de Adicionar Receita/Despesa */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-[40px] p-10 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+                {modalType === 'INCOME' ? 'Nova Receita' : 'Nova Despesa'}
+              </h2>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-4 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-2xl transition-all">
+                <X size={20}/>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+                <input 
+                  required 
+                  className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold" 
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})} 
+                  placeholder="Ex: Pagamento de fornecedor"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label>
+                <input 
+                  required 
+                  type="number" 
+                  step="0.01"
+                  className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold" 
+                  value={formData.value} 
+                  onChange={e => setFormData({...formData, value: e.target.value})} 
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                <input 
+                  required 
+                  type="date"
+                  className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold" 
+                  value={formData.date} 
+                  onChange={e => setFormData({...formData, date: e.target.value})} 
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
+                <input 
+                  className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold" 
+                  value={formData.category} 
+                  onChange={e => setFormData({...formData, category: e.target.value})} 
+                  placeholder="Ex: Manutenção, Marketing, etc."
+                />
+              </div>
+            </div>
+
+            <button 
+              type="submit" 
+              className={`w-full py-5 rounded-3xl font-black uppercase tracking-widest shadow-xl transition-all ${
+                modalType === 'INCOME' 
+                  ? 'bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700' 
+                  : 'bg-rose-600 text-white shadow-rose-100 hover:bg-rose-700'
+              }`}
+            >
+              {modalType === 'INCOME' ? 'Adicionar Receita' : 'Adicionar Despesa'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
