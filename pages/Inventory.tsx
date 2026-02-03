@@ -8,9 +8,10 @@ interface InventoryProps {
   setToys: React.Dispatch<React.SetStateAction<Toy[]>>;
   categories: string[];
   setCategories: (cats: string[]) => void;
+  user: User; // ← ADICIONADO: Recebe user via props
 }
 
-const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCategories }) => {
+const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCategories, user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
@@ -27,8 +28,7 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
   // Estado para visualização de descrição completa
   const [viewingDescription, setViewingDescription] = useState<Toy | null>(null);
 
-  const userStr = localStorage.getItem('susu_user');
-  const user: User | null = userStr ? JSON.parse(userStr) : null;
+  // ← CORRIGIDO: Usa user recebido via props
   const isAdmin = user?.role === UserRole.ADMIN;
   
   const [formData, setFormData] = useState<Partial<Toy>>({
@@ -444,115 +444,99 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
               
               <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Valor da Locação 
-                  a partir de:</p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Valor da Locação a partir de:</p>
                   <p className="text-3xl font-black text-blue-600">R$ {viewingDescription.price.toFixed(2)}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    setViewingDescription(null);
-                    openAlbumViewer(viewingDescription);
-                  }}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all flex items-center gap-2"
-                >
-                  <Maximize size={16} />
-                  Ver Fotos
-                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de Visualização de Álbum */}
+      {/* Visualizador de Álbum */}
       {viewingAlbum && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[110] flex items-center justify-center p-4">
           <button 
             onClick={closeAlbumViewer}
-            className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all"
           >
-            <X size={24} />
+            <X size={32} className="text-white" />
           </button>
           
           <div className="relative w-full max-w-4xl">
+            <img 
+              src={getToyImages(viewingAlbum)[currentImageIndex]} 
+              alt={viewingAlbum.name}
+              className="w-full max-h-[80vh] object-contain rounded-3xl"
+            />
+            
             {getToyImages(viewingAlbum).length > 1 && (
               <>
                 <button
                   onClick={prevImage}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all"
                 >
-                  <ChevronLeft size={32} />
+                  <ChevronLeft size={32} className="text-white" />
                 </button>
+                
                 <button
                   onClick={nextImage}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-10"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all"
                 >
-                  <ChevronRight size={32} />
+                  <ChevronRight size={32} className="text-white" />
                 </button>
-              </>
-            )}
-            
-            <div className="bg-slate-900 rounded-3xl overflow-hidden">
-              <img
-                src={getToyImages(viewingAlbum)[currentImageIndex]}
-                alt={`${viewingAlbum.name} - Foto ${currentImageIndex + 1}`}
-                className="w-full h-auto max-h-[80vh] object-contain"
-              />
-              
-              <div className="p-6 text-white">
-                <h3 className="text-2xl font-black mb-2">{viewingAlbum.name}</h3>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-300">
-                    Foto {currentImageIndex + 1} de {getToyImages(viewingAlbum).length}
-                  </p>
-                  <p className="text-xl font-bold text-blue-400">
-                    R$ {viewingAlbum.price.toFixed(2)}
+                
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full">
+                  <p className="text-white font-bold text-sm">
+                    {currentImageIndex + 1} / {getToyImages(viewingAlbum).length}
                   </p>
                 </div>
-              </div>
-            </div>
-            
-            {getToyImages(viewingAlbum).length > 1 && (
-              <div className="flex gap-2 justify-center mt-4 overflow-x-auto pb-2">
-                {getToyImages(viewingAlbum).map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentImageIndex(idx)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                      idx === currentImageIndex 
-                        ? 'border-blue-500 ring-2 ring-blue-500/50' 
-                        : 'border-white/30 hover:border-white/60'
-                    }`}
-                  >
-                    <img
-                      src={img}
-                      alt={`Miniatura ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
+              </>
             )}
           </div>
         </div>
       )}
 
+      {/* Modal de Gerenciar Categorias */}
       {isCatModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 md:p-6">
-          <div className="bg-white w-full max-w-md rounded-[40px] p-6 md:p-8 shadow-2xl space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl md:text-2xl font-black text-slate-800">Categorias</h2>
-              <button onClick={() => setIsCatModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600"><X /></button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] max-w-xl w-full p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-black text-slate-800">Gerenciar Categorias</h2>
+              <button onClick={() => setIsCatModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-all">
+                <X size={24} className="text-slate-400" />
+              </button>
             </div>
-            <div className="flex gap-2">
-              <input value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="Nova categoria..." className="flex-1 px-4 py-3 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20 text-sm" />
-              <button onClick={handleAddCategory} className="p-3 md:p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-colors"><Plus size={20}/></button>
+            
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Nova categoria..."
+                  className="flex-1 px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20"
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && handleAddCategory()}
+                />
+                <button
+                  onClick={handleAddCategory}
+                  className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2"
+                >
+                  <Plus size={18} /> Adicionar
+                </button>
+              </div>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-              {categories.map(c => (
-                <div key={c} className="flex justify-between items-center p-3 md:p-4 bg-slate-50 rounded-2xl group">
-                  <span className="font-bold text-slate-700 text-sm">{c}</span>
-                  <button onClick={() => handleRemoveCategory(c)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+            
+            <div className="space-y-2">
+              {categories.map(cat => (
+                <div key={cat} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                  <span className="font-bold text-slate-700">{cat}</span>
+                  <button
+                    onClick={() => handleRemoveCategory(cat)}
+                    className="p-2 text-red-400 hover:bg-red-50 rounded-xl transition-all"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -560,9 +544,10 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
         </div>
       )}
 
-      {isModalOpen && isAdmin && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 md:p-6">
-          <form onSubmit={handleSave} className="bg-white w-full max-xl rounded-[40px] p-6 md:p-10 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in duration-300">
+      {/* Modal de Edição/Criação */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="bg-white rounded-[40px] max-w-4xl w-full p-8 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl md:text-2xl font-black text-slate-800">{editingToy ? 'Editar Detalhes' : 'Novo Brinquedo'}</h2>
                 <button type="button" onClick={() => setIsModalOpen(false)} disabled={isSaving} className="p-3 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-2xl disabled:opacity-50"><X size={20}/></button>
