@@ -59,7 +59,9 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
       return viewTab === 'Mês' ? (d.getMonth() === month && d.getFullYear() === year) : (d.getFullYear() === year);
     });
 
-    const receitas = filteredRentals.reduce((acc, r) => acc + (Number(r.entryValue) || 0), 0);
+    const receitasReservas = filteredRentals.reduce((acc, r) => acc + (Number(r.entryValue) || 0), 0);
+    const receitasTransacoes = filteredTrans.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.value) || 0), 0);
+    const receitas = receitasReservas + receitasTransacoes;
     const despesas = filteredTrans.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.value) || 0), 0);
     const aReceber = filteredRentals.reduce((acc, r) => acc + ((Number(r.totalValue) || 0) - (Number(r.entryValue) || 0)), 0);
     const lucro = receitas - despesas;
@@ -71,7 +73,9 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
   const chartData = useMemo(() => {
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return months.map((m, i) => {
-      const r = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
+      const receitasReservas = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
+      const receitasTransacoes = stats.filteredTrans.filter(t => t.type === 'INCOME' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
+      const r = receitasReservas + receitasTransacoes;
       const d = stats.filteredTrans.filter(t => t.type === 'EXPENSE' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
       const lucro = r - d;
       return { name: m, Entradas: r, Saídas: d, Lucro: lucro };
@@ -99,7 +103,9 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
   const profitTrendData = useMemo(() => {
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return months.map((m, i) => {
-      const r = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
+      const receitasReservas = stats.filteredRentals.filter(rent => new Date(rent.date + 'T00:00:00').getMonth() === i).reduce((acc, rent) => acc + (Number(rent.entryValue) || 0), 0);
+      const receitasTransacoes = stats.filteredTrans.filter(t => t.type === 'INCOME' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
+      const r = receitasReservas + receitasTransacoes;
       const d = stats.filteredTrans.filter(t => t.type === 'EXPENSE' && new Date(t.date).getMonth() === i).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
       return { name: m, Lucro: r - d };
     });
@@ -294,7 +300,15 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
                 <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
-            {stats.filteredTrans.map(t => (
+            {stats.filteredTrans.filter(t => t.type === 'INCOME').map(t => (
+              <tr key={t.id}>
+                <td className="py-3 px-2 font-black">{t.description}</td>
+                <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-[10px]">Receita</td>
+                <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+              </tr>
+            ))}
+            {stats.filteredTrans.filter(t => t.type === 'EXPENSE').map(t => (
               <tr key={t.id}>
                 <td className="py-3 px-2 font-black">{t.description}</td>
                 <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
@@ -476,7 +490,23 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
                 </td>
               </tr>
             ))}
-            {(activeFilter === 'Despesas' || activeFilter === 'Lucro') && stats.filteredTrans.map(t => (
+            {(activeFilter === 'Receitas' || activeFilter === 'Lucro') && stats.filteredTrans.filter(t => t.type === 'INCOME').map(t => (
+              <tr key={t.id}>
+                <td className="px-4 md:px-8 py-4">{t.description}</td>
+                <td className="px-4 md:px-8 py-4 text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-emerald-600">+ R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-right">
+                  <button 
+                    onClick={() => handleDeleteTransaction(t.id)}
+                    className="p-2 md:p-3 bg-slate-100 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-xl md:rounded-2xl transition-all"
+                    title="Excluir receita"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {(activeFilter === 'Despesas' || activeFilter === 'Lucro') && stats.filteredTrans.filter(t => t.type === 'EXPENSE').map(t => (
               <tr key={t.id}>
                 <td className="px-4 md:px-8 py-4">{t.description}</td>
                 <td className="px-4 md:px-8 py-4 text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
