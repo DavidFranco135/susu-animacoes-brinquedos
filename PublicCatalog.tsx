@@ -482,6 +482,7 @@ const PublicCatalog: React.FC = () => {
     © {new Date().getFullYear()} · Todos os direitos reservados
   </p>
 </div>
+    </div>
 
 </footer>
 
