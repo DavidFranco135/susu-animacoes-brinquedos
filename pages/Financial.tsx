@@ -290,29 +290,29 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
         </div>
       </div>
 
-      <header className="flex flex-col md:flex-row justify-between items-center gap-6 print:hidden">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 print:hidden">
         <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Fluxo de Caixa</h1>
-        <div className="flex gap-3 items-center flex-wrap">
+        <div className="grid grid-cols-2 md:flex gap-3 w-full md:w-auto">
           <button 
             onClick={() => setActiveFilter('Receitas')}
-            className="flex items-center gap-2 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
+            className="flex items-center justify-center gap-2 bg-emerald-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
           >
             <ArrowUpCircle size={18} /> Receitas
           </button>
           <button 
             onClick={() => setActiveFilter('Despesas')}
-            className="flex items-center gap-2 bg-rose-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg"
+            className="flex items-center justify-center gap-2 bg-rose-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg"
           >
             <ArrowDownCircle size={18} /> Despesas
           </button>
           <button 
             onClick={handleDownloadPDF}
             disabled={isGeneratingPDF}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed col-span-2 md:col-span-1"
           >
             <Download size={18} /> {isGeneratingPDF ? 'Gerando...' : 'Relatório PDF'}
           </button>
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border">
+          <div className="flex bg-white p-1 rounded-2xl shadow-sm border col-span-2 md:col-span-1">
             <button onClick={() => setViewTab('Mês')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Mês' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Mês</button>
             <button onClick={() => setViewTab('Ano')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Ano' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Ano</button>
           </div>
