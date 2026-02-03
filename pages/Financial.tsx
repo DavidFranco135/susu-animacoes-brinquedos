@@ -15,6 +15,8 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import { Rental, FinancialTransaction, User } from '../types';
+import { db } from '../firebase';
+import { deleteDoc, doc } from "firebase/firestore";
 
 interface FinancialProps {
   rentals: Rental[];
@@ -161,11 +163,11 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
         ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
         : currentDate.getFullYear().toString();
       
-      pdf.save(`Relatorio-Financeiro-${periodName}.pdf`);
+      pdf.save(`relatorio-financeiro-${periodName}.pdf`);
       
     } catch (err) {
-      console.error('Erro ao gerar PDF:', err);
-      alert("Erro ao gerar o PDF. Tente novamente.");
+      console.error("Erro ao gerar PDF:", err);
+      alert("Erro ao gerar o relatório. Tente novamente.");
     } finally {
       const element = document.getElementById('financial-report-print');
       if (element) {
@@ -179,147 +181,118 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
     }
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    if (!confirm('Deseja realmente excluir esta despesa?')) return;
-    setTransactions((prev: FinancialTransaction[]) => prev.filter(t => t.id !== id));
+  // ✅ FUNÇÃO DE DELETE CORRIGIDA (seguindo padrão do CustomersPage)
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm("Deseja realmente excluir esta transação?")) return;
+    
+    try {
+      await deleteDoc(doc(db, "transactions", id));
+      setTransactions((prev: FinancialTransaction[]) => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("Erro ao excluir transação:", error);
+      alert("Erro ao excluir a transação. Tente novamente.");
+    }
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 pb-20">
-      {/* Relatório oculto para PDF */}
-      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-16 text-slate-900">
-        <div className="border-b-4 border-slate-900 pb-10 mb-12 flex justify-between items-end">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-[32px] overflow-hidden border-2 border-slate-900">
-              {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" /> : <div className="w-full h-full bg-slate-100"/>}
-            </div>
-            <div>
-              <h1 className="text-4xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
-              <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-2">
-                {viewTab === 'Mês' 
-                  ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-                  : `Ano ${currentDate.getFullYear()}`}
-              </p>
-            </div>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-black opacity-40">GERADO EM</p>
-            <p className="font-black text-xl">{new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-8 mb-12">
-          <div className="bg-emerald-50 p-6 rounded-3xl border-2 border-emerald-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-emerald-600">Receitas</p>
-            <p className="text-3xl font-black text-emerald-700">R$ {stats.receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-red-50 p-6 rounded-3xl border-2 border-red-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-red-600">Despesas</p>
-            <p className="text-3xl font-black text-red-700">R$ {stats.despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-blue-50 p-6 rounded-3xl border-2 border-blue-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-blue-600">Lucro Líquido</p>
-            <p className="text-3xl font-black text-blue-700">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-amber-50 p-6 rounded-3xl border-2 border-amber-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-amber-600">A Receber</p>
-            <p className="text-3xl font-black text-amber-700">R$ {stats.aReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-
-        <div className="space-y-10">
+    <div className="space-y-6">
+      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-12">
+        <div className="border-b-4 border-slate-900 pb-8 mb-8 flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Receitas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Cliente</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredRentals.slice(0, 15).map(r => (
-                  <tr key={r.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{r.customerName}</td>
-                    <td className="py-3 text-right font-black text-emerald-700">R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Despesas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Descrição</th>
-                  <th className="py-3 text-left">Categoria</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredTrans.filter(t => t.type === 'EXPENSE').slice(0, 15).map(t => (
-                  <tr key={t.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{t.description}</td>
-                    <td className="py-3 uppercase text-[10px] opacity-60">{t.category}</td>
-                    <td className="py-3 text-right font-black text-red-700">R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-12 border-t-4 border-slate-900 pt-8 text-center">
-          <div className="bg-slate-900 text-white p-8 rounded-3xl">
-            <p className="text-sm font-black uppercase mb-3 opacity-60">Resultado Final do Período</p>
-            <p className="text-5xl font-black">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-sm font-bold mt-3 uppercase">
-              Margem: {stats.receitas > 0 ? ((stats.lucro / stats.receitas) * 100).toFixed(1) : '0'}%
+            <h1 className="text-3xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
+            <p className="text-sm font-bold mt-2 uppercase tracking-widest opacity-60">
+              {viewTab === 'Mês' 
+                ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                : `Ano ${currentDate.getFullYear()}`}
             </p>
           </div>
+          <div className="w-20 h-20 rounded-[28px] overflow-hidden border-2 border-slate-900">
+            {user?.profilePhotoUrl ? (
+              <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" />
+            ) : (
+              <div className="w-full h-full bg-slate-100"/>
+            )}
+          </div>
         </div>
 
+        <div className="grid grid-cols-4 gap-6 mb-10">
+          <div className="border-2 border-slate-900 p-6 rounded-2xl">
+            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Receitas</p>
+            <p className="text-2xl font-black text-emerald-600">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</p>
+          </div>
+          <div className="border-2 border-slate-900 p-6 rounded-2xl">
+            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Despesas</p>
+            <p className="text-2xl font-black text-rose-500">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</p>
+          </div>
+          <div className="border-2 border-slate-900 p-6 rounded-2xl">
+            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Lucro</p>
+            <p className="text-2xl font-black text-blue-600">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</p>
+          </div>
+          <div className="border-2 border-slate-900 p-6 rounded-2xl">
+            <p className="text-[10px] font-black uppercase opacity-60 mb-2">A Receber</p>
+            <p className="text-2xl font-black text-amber-500">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</p>
+          </div>
+        </div>
+
+        <table className="w-full text-[11px] text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 uppercase font-black">
+              <th className="py-3 px-2">Descrição</th>
+              <th className="py-3 px-2">Data</th>
+              <th className="py-3 px-2">Tipo</th>
+              <th className="py-3 px-2 text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {stats.filteredRentals.map(r => (
+              <tr key={r.id}>
+                <td className="py-3 px-2 font-black">Entrada: {r.customerName}</td>
+                <td className="py-3 px-2 opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-[10px]">Receita</td>
+                <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
+              </tr>
+            ))}
+            {stats.filteredTrans.map(t => (
+              <tr key={t.id}>
+                <td className="py-3 px-2 font-black">{t.description}</td>
+                <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="py-3 px-2 uppercase text-rose-500 font-black text-[10px]">Despesa</td>
+                <td className="py-3 px-2 text-right font-black text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
         <div className="mt-10 border-t pt-4 text-[9px] font-black uppercase opacity-40 text-center">
-          Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+          Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')}
         </div>
       </div>
 
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 print:hidden">
-        <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Fluxo de Caixa</h1>
-        <div className="grid grid-cols-2 md:flex gap-3 w-full md:w-auto">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight">Financeiro</h1>
+          <p className="text-slate-500 font-medium">Visão completa do fluxo de caixa.</p>
+        </div>
+        <div className="flex gap-3">
           <button 
-            onClick={() => setActiveFilter('Receitas')}
-            className="flex items-center justify-center gap-2 bg-emerald-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
-          >
-            <ArrowUpCircle size={18} /> Receitas
-          </button>
-          <button 
-            onClick={() => setActiveFilter('Despesas')}
-            className="flex items-center justify-center gap-2 bg-rose-500 text-white px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg"
-          >
-            <ArrowDownCircle size={18} /> Despesas
-          </button>
-          <button 
-            onClick={handleDownloadPDF}
+            onClick={handleDownloadPDF} 
             disabled={isGeneratingPDF}
-            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 md:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed col-span-2 md:col-span-1"
+            className="bg-white border border-slate-200 text-slate-600 px-6 md:px-8 py-3 md:py-4 rounded-3xl font-black text-xs md:text-sm uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download size={18} /> {isGeneratingPDF ? 'Gerando...' : 'Relatório PDF'}
+            <Download size={18} className="inline mr-2"/> {isGeneratingPDF ? 'Gerando...' : 'Exportar PDF'}
           </button>
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border col-span-2 md:col-span-1">
-            <button onClick={() => setViewTab('Mês')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Mês' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Mês</button>
-            <button onClick={() => setViewTab('Ano')} className={`px-6 py-2 rounded-xl text-xs font-black uppercase ${viewTab === 'Ano' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>Ano</button>
-          </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Toggle Mês/Ano */}
+      <div className="flex gap-2 bg-slate-100 p-2 rounded-3xl w-fit">
+        <button onClick={() => setViewTab('Mês')} className={`px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${viewTab === 'Mês' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Mês Atual</button>
+        <button onClick={() => setViewTab('Ano')} className={`px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${viewTab === 'Ano' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Ano Completo</button>
+      </div>
+
+      {/* Cards de Resumo */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card Receitas */}
         <button onClick={() => setActiveFilter('Receitas')} className={`p-6 rounded-[35px] border-2 transition-all text-left ${activeFilter === 'Receitas' ? 'bg-emerald-500 border-emerald-200 text-white shadow-xl' : 'bg-white border-transparent'}`}>
           <ArrowUpCircle size={32} className={activeFilter === 'Receitas' ? 'text-white' : 'text-emerald-500'} />
@@ -427,37 +400,37 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
         </div>
       </div>
 
-      {/* Listagem com proteção toLocaleString */}
+      {/* Listagem com proteção toLocaleString - BOTÃO DE DELETAR VISÍVEL NO MOBILE */}
       <div className="bg-white rounded-[30px] border overflow-hidden shadow-sm">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
             <tr>
-              <th className="px-8 py-4">Descrição</th>
-              <th className="px-8 py-4">Data</th>
-              <th className="px-8 py-4">Valor</th>
-              <th className="px-8 py-4 text-right">Ações</th>
+              <th className="px-4 md:px-8 py-4">Descrição</th>
+              <th className="px-4 md:px-8 py-4">Data</th>
+              <th className="px-4 md:px-8 py-4">Valor</th>
+              <th className="px-4 md:px-8 py-4 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y text-sm font-bold">
             {(activeFilter === 'Receitas' || activeFilter === 'Lucro') && stats.filteredRentals.map(r => (
               <tr key={r.id}>
-                <td className="px-8 py-4">Entrada: {r.customerName}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
+                <td className="px-4 md:px-8 py-4">Entrada: {r.customerName}</td>
+                <td className="px-4 md:px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-right">
                   <span className="text-xs text-slate-300 italic">Vinculada à reserva</span>
                 </td>
               </tr>
             ))}
             {(activeFilter === 'Despesas' || activeFilter === 'Lucro') && stats.filteredTrans.map(t => (
               <tr key={t.id}>
-                <td className="px-8 py-4">{t.description}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
+                <td className="px-4 md:px-8 py-4">{t.description}</td>
+                <td className="px-4 md:px-8 py-4 text-slate-400">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-right">
                   <button 
                     onClick={() => handleDeleteTransaction(t.id)}
-                    className="p-2 text-red-400 hover:text-white hover:bg-red-500 rounded-xl transition-all"
+                    className="p-2 md:p-3 bg-slate-100 text-red-400 hover:bg-red-600 hover:text-white rounded-xl md:rounded-2xl transition-all"
                     title="Excluir despesa"
                   >
                     <Trash2 size={16} />
@@ -467,10 +440,10 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
             ))}
             {activeFilter === 'AReceber' && stats.filteredRentals.map(r => (
               <tr key={r.id}>
-                <td className="px-8 py-4">Pendente: {r.customerName}</td>
-                <td className="px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="px-8 py-4 text-amber-500">R$ {((Number(r.totalValue) || 0) - (Number(r.entryValue) || 0)).toLocaleString('pt-BR')}</td>
-                <td className="px-8 py-4 text-right">
+                <td className="px-4 md:px-8 py-4">Pendente: {r.customerName}</td>
+                <td className="px-4 md:px-8 py-4 text-slate-400">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-amber-500">R$ {((Number(r.totalValue) || 0) - (Number(r.entryValue) || 0)).toLocaleString('pt-BR')}</td>
+                <td className="px-4 md:px-8 py-4 text-right">
                   <span className="text-xs text-slate-300 italic">Pendente</span>
                 </td>
               </tr>
