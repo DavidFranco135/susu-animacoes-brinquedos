@@ -194,52 +194,47 @@ const PublicCatalog: React.FC = () => {
                         : 'bg-slate-500 text-white'
                     }`}
                   >
-                    {toy.status}
+                    {toy.status === ToyStatus.AVAILABLE
+                      ? 'Disponível'
+                      : toy.status === ToyStatus.RESERVED
+                      ? 'Reservado'
+                      : 'Locado'}
                   </span>
                 </div>
               </div>
 
               {/* Conteúdo */}
-              <div className="p-8 space-y-6">
+              <div className="p-6 space-y-4">
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2 uppercase">
-                    {toy.name}
-                  </h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-                    {toy.category} {toy.size && `• ${toy.size}`}
-                  </p>
-                  {toy.description && (
-                    <div>
-                      <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">
-                        {toy.description}
-                      </p>
-                      {toy.description.length > 100 && (
-                        <button
-                          onClick={() => setViewingDescription(toy)}
-                          className="text-sm text-blue-600 font-bold hover:text-blue-700 mt-2 underline"
-                        >
-                          Ver descrição completa
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  <h3 className="text-xl font-black text-slate-800 mb-1">{toy.name}</h3>
+                  <p className="text-xs font-bold uppercase text-slate-400 tracking-widest">{toy.category}</p>
                 </div>
 
-                <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                {toy.description && (
+                  <p className="text-sm text-slate-600 line-clamp-2">
+                    {toy.description}
+                  </p>
+                )}
+
+                {toy.description && toy.description.length > 100 && (
+                  <button
+                    onClick={() => setViewingDescription(toy)}
+                    className="text-blue-600 text-xs font-bold hover:underline flex items-center gap-1"
+                  >
+                    Ver descrição completa <ExternalLink size={12} />
+                  </button>
+                )}
+
+                <div className="pt-4 border-t border-slate-100 flex items-end justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Valor Locação- 
-                      a partir de:
-                    </p>
-                    <p className="text-2xl font-black text-blue-600">
-                      R$ {toy.price.toLocaleString('pt-BR')}
-                    </p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">a partir de</p>
+                    <p className="text-2xl font-black text-blue-600">R$ {toy.price.toLocaleString('pt-BR')}</p>
                   </div>
                   <button
                     onClick={() => handleWhatsAppClick(toy.name)}
-                    className="flex items-center gap-2 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl"
+                    className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
                   >
-                    <MessageCircle size={16} /> Pedir Orçamento
+                    <MessageCircle size={14} /> Orçamento
                   </button>
                 </div>
               </div>
@@ -247,83 +242,58 @@ const PublicCatalog: React.FC = () => {
           ))}
         </div>
 
-        {/* Mensagem quando não há resultados */}
         {filteredToys.length === 0 && (
           <div className="text-center py-20">
-            <Package size={64} className="mx-auto text-slate-200 mb-6" />
-            <h3 className="text-2xl font-black text-slate-300 uppercase tracking-tight mb-2">
-              Nenhum item encontrado
-            </h3>
-            <p className="text-slate-400 font-medium">
-              Tente ajustar os filtros ou a busca
-            </p>
+            <Package size={64} className="mx-auto text-slate-300 mb-4" />
+            <p className="text-slate-400 font-bold">Nenhum brinquedo encontrado</p>
           </div>
         )}
       </main>
 
       {/* Modal de Descrição Completa */}
       {viewingDescription && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] max-w-2xl w-full p-8 shadow-2xl relative">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] max-w-2xl w-full p-8 space-y-6 relative">
             <button 
               onClick={() => setViewingDescription(null)}
               className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-all"
             >
-              <X size={24} className="text-slate-400" />
+              <X size={20} />
             </button>
             
-            <div className="space-y-4">
+            <div>
+              <h2 className="text-3xl font-black text-slate-800 mb-2">{viewingDescription.name}</h2>
+              <p className="text-sm font-bold uppercase text-slate-400 tracking-widest">{viewingDescription.category}</p>
+            </div>
+            
+            <div className="prose prose-slate max-w-none">
+              <p className="text-slate-600 leading-relaxed whitespace-pre-line">{viewingDescription.description}</p>
+            </div>
+            
+            <div className="pt-6 border-t border-slate-100 space-y-6">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase">{viewingDescription.name}</h2>
-                <div className="flex items-center gap-3 text-sm text-slate-500 font-bold">
-                  <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black uppercase">
-                    {viewingDescription.category}
-                  </span>
-                  {viewingDescription.size && <span>• Tamanho: {viewingDescription.size}</span>}
-                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                    viewingDescription.status === ToyStatus.AVAILABLE
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : viewingDescription.status === ToyStatus.RESERVED
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {viewingDescription.status}
-                  </span>
-                </div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Valor da Locação
+                a partir de:</p>
+                <p className="text-3xl font-black text-blue-600">R$ {viewingDescription.price.toLocaleString('pt-BR')}</p>
               </div>
-              
-              <div className="border-t border-slate-100 pt-4">
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3">Descrição Completa</h3>
-                <p className="text-slate-600 leading-relaxed whitespace-pre-line">
-                  {viewingDescription.description}
-                </p>
-              </div>
-              
-              <div className="border-t border-slate-100 pt-4 flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Valor da Locação
-                  a partir de:</p>
-                  <p className="text-3xl font-black text-blue-600">R$ {viewingDescription.price.toLocaleString('pt-BR')}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setViewingDescription(null);
-                      openAlbumViewer(viewingDescription);
-                    }}
-                    className="px-4 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all flex items-center gap-2"
-                  >
-                    <Maximize size={16} />
-                    Ver Fotos
-                  </button>
-                  <button
-                    onClick={() => handleWhatsAppClick(viewingDescription.name)}
-                    className="px-4 py-3 bg-emerald-500 text-white rounded-2xl font-bold text-sm hover:bg-emerald-600 transition-all flex items-center gap-2"
-                  >
-                    <MessageCircle size={16} />
-                    Pedir Orçamento
-                  </button>
-                </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setViewingDescription(null);
+                    openAlbumViewer(viewingDescription);
+                  }}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all flex items-center gap-2"
+                >
+                  <Maximize size={16} />
+                  Ver Fotos
+                </button>
+                <button
+                  onClick={() => handleWhatsAppClick(viewingDescription.name)}
+                  className="px-4 py-3 bg-emerald-500 text-white rounded-2xl font-bold text-sm hover:bg-emerald-600 transition-all flex items-center gap-2"
+                >
+                  <MessageCircle size={16} />
+                  Pedir Orçamento
+                </button>
               </div>
             </div>
           </div>
@@ -430,16 +400,16 @@ const PublicCatalog: React.FC = () => {
 
     {/* Quem Somos */}
     <div className="text-center max-w-4xl mx-auto space-y-4">
-      <p className="text-[11px] text-slate-400 font-black uppercase tracking-widest">
+      <p className="text-sm text-slate-400 font-black uppercase tracking-widest">
         Quem Somos
       </p>
 
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-base text-slate-600 leading-relaxed">
         Com 11 anos de experiência em animações de festas, a <strong>Susu Animações e Brinquedos</strong> nasceu do sonho de transformar eventos em momentos inesquecíveis.
         Fundada há 4 anos por <strong>Suellen Santos</strong>, a empresa é movida pela paixão, alegria e dedicação em criar experiências únicas para crianças e famílias.
       </p>
 
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-base text-slate-600 leading-relaxed">
         Trabalhamos com total compromisso com a <strong>segurança</strong>, <strong>pontualidade</strong> e <strong>qualidade</strong>, sempre com carinho e atenção aos detalhes,
         para garantir a felicidade de todos os convidados.
       </p>
