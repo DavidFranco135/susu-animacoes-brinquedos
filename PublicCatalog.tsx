@@ -55,9 +55,21 @@ const PublicCatalog: React.FC = () => {
 
   // Função para gerar mensagem do WhatsApp
  const handleWhatsAppClick = (toyName: string) => {
-  const rawPhone = company?.phone || '5521993638102';
+  let phone = company?.phone || '21993638102';
 
-  const phone = rawPhone.replace(/\D/g, '');
+  phone = phone.replace(/\D/g, '');
+
+  if (phone.startsWith('0')) {
+    phone = phone.substring(1);
+  }
+
+  if (!phone.startsWith('55')) {
+    phone = '55' + phone;
+  }
+
+  phone = phone.replace(/^55(\d{2})9{2}/, '55$19');
+
+  console.log('📞 Telefone final enviado ao WhatsApp:', phone);
 
   const message = encodeURIComponent(
     `Olá! Gostaria de solicitar um orçamento para: *${toyName}*`
@@ -65,6 +77,7 @@ const PublicCatalog: React.FC = () => {
 
   window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
 };
+
 
 
   // Funções para gerenciar o álbum de fotos
