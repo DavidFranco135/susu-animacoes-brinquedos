@@ -403,8 +403,20 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2">
-                      <button onClick={() => handleOpenModal(toy)} className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={18} /></button>
-                      <button onClick={() => handleDeleteToy(toy.id)} className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={18} /></button>
+                      <button 
+                        onClick={() => handleOpenModal(toy)} 
+                        className="p-2.5 md:p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                        title="Editar brinquedo"
+                      >
+                        <Edit3 size={20} strokeWidth={2.5} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteToy(toy.id)} 
+                        className="p-2.5 md:p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                        title="Excluir brinquedo"
+                      >
+                        <Trash2 size={20} strokeWidth={2.5} />
+                      </button>
                   </div>
                 )}
               </div>
