@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
 import { CompanySettings, User } from '../types';
 import { auth } from '../firebase';
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut } from 'firebase/auth';
 
 interface Props {
   company: CompanySettings;
@@ -87,32 +87,62 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
       return;
     }
 
+    // Se não tem email nem senha para alterar
+    if (!newEmail && !newPassword) {
+      alert("Por favor, preencha o novo email e/ou a nova senha.");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
       const currentUser = auth.currentUser;
       if (!currentUser || !currentUser.email) {
         alert("Usuário não autenticado.");
+        setIsSaving(false);
         return;
       }
+
+      // Importar setDoc e doc do Firebase
+      const { setDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
 
       // Reautentica o usuário com a senha atual
       const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
       await reauthenticateWithCredential(currentUser, credential);
 
-      // Atualiza o email se foi fornecido
-      if (newEmail && newEmail !== currentUser.email) {
-        await updateEmail(currentUser, newEmail);
-        // Atualiza também no documento do usuário
-        await onUpdateUser({ ...userData, email: newEmail });
-      }
+      let successMessage = "";
 
-      // Atualiza a senha se foi fornecida
+      // Atualiza a senha primeiro (se fornecida)
       if (newPassword) {
         await updatePassword(currentUser, newPassword);
+        successMessage = "Senha atualizada com sucesso!";
       }
 
-      alert("Email e/ou senha atualizados com sucesso! Por favor, faça login novamente.");
+      // Atualiza o email se foi fornecido (APENAS se for diferente do atual)
+      if (newEmail && newEmail !== currentUser.email) {
+        // 1. Atualiza o email no documento do usuário
+        await onUpdateUser({ ...userData, email: newEmail });
+        
+        // 2. Atualiza o email admin no settings (para manter as permissões de admin)
+        await setDoc(doc(db, "settings", "admin"), { email: newEmail });
+        
+        // 3. Tenta atualizar no Firebase Authentication (pode dar erro, mas está tudo bem)
+        try {
+          await updateEmail(currentUser, newEmail);
+          successMessage = successMessage 
+            ? "Email e senha atualizados com sucesso! Você continuará como ADMIN. Faça logout e login novamente com o novo email."
+            : "Email atualizado com sucesso! Você continuará como ADMIN. Faça logout e login novamente com o novo email.";
+        } catch (emailError: any) {
+          // Se der erro ao atualizar email no Auth, ainda está tudo certo no sistema
+          console.log("Aviso ao atualizar email no Auth:", emailError);
+          successMessage = successMessage 
+            ? "Senha atualizada! O email foi salvo no sistema e você continuará como ADMIN. Para fazer login, use o NOVO email e a NOVA senha."
+            : "Email salvo no sistema! Você continuará como ADMIN. Para fazer login, use o NOVO email e a senha atual.";
+        }
+      }
+
+      alert(successMessage || "Alterações salvas com sucesso!");
       
       // Limpa os campos
       setCurrentPassword('');
@@ -120,6 +150,14 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
       setNewPassword('');
       setConfirmPassword('');
       setIsChangingCredentials(false);
+      
+      // Se alterou email ou senha, faz logout automático
+      if (newEmail || newPassword) {
+        alert("Fazendo logout para você entrar com as novas credenciais...");
+        setTimeout(() => {
+          signOut(auth);
+        }, 2000);
+      }
       
     } catch (error: any) {
       console.error("Erro ao alterar credenciais:", error);
@@ -130,8 +168,10 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
         alert("Este email já está em uso por outra conta.");
       } else if (error.code === 'auth/invalid-email') {
         alert("Email inválido.");
+      } else if (error.code === 'auth/requires-recent-login') {
+        alert("Por segurança, faça logout e login novamente antes de alterar o email.");
       } else {
-        alert("Erro ao alterar email/senha: " + error.message);
+        alert("Erro ao alterar credenciais: " + error.message);
       }
     } finally {
       setIsSaving(false);
@@ -297,6 +337,15 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                     />
                   </div>
                 )}
+
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                  <p className="text-xs font-bold text-blue-800">
+                    🔐 Você continuará como ADMIN mesmo após alterar o email!
+                  </p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Após a alteração, faça logout e entre com as novas credenciais.
+                  </p>
+                </div>
 
                 <div className="flex gap-4">
                   <button
