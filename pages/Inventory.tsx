@@ -1,17 +1,17 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Search, Edit3, X, Save, Upload, Trash2, Settings, Maximize, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Toy, ToyStatus, User, UserRole } from '../types';
+import { Toy, ToyStatus, UserRole } from '../types';
 import { getFirestore, doc, deleteDoc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { useUser } from '../contexts/UserContext';
 
 interface InventoryProps {
   toys: Toy[];
   setToys: React.Dispatch<React.SetStateAction<Toy[]>>;
   categories: string[];
   setCategories: (cats: string[]) => void;
-  user: User; // ← ADICIONADO: Recebe user via props
 }
 
-const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCategories, user }) => {
+const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCategories }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
@@ -28,7 +28,8 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
   // Estado para visualização de descrição completa
   const [viewingDescription, setViewingDescription] = useState<Toy | null>(null);
 
-  // ← CORRIGIDO: Usa user recebido via props
+  // ✅ USAR CONTEXT DO FIREBASE (sincronizado em tempo real)
+  const { user } = useUser();
   const isAdmin = user?.role === UserRole.ADMIN;
   
   const [formData, setFormData] = useState<Partial<Toy>>({
