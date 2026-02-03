@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
 import { CompanySettings, User } from '../types';
+import { auth } from '../firebase';
+import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
 interface Props {
   company: CompanySettings;
@@ -14,6 +16,13 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const [userData, setUserData] = useState<User>(user);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  
+  // Estados para alteração de email/senha
+  const [isChangingCredentials, setIsChangingCredentials] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +63,76 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
     } catch (error) {
       console.error("Erro ao salvar:", error);
       alert("Erro ao salvar as configurações.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ✅ NOVA FUNÇÃO: Alterar Email e Senha
+  const handleChangeCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentPassword) {
+      alert("Por favor, digite sua senha atual para confirmar a alteração.");
+      return;
+    }
+
+    if (newPassword && newPassword !== confirmPassword) {
+      alert("A nova senha e a confirmação não coincidem.");
+      return;
+    }
+
+    if (newPassword && newPassword.length < 6) {
+      alert("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser || !currentUser.email) {
+        alert("Usuário não autenticado.");
+        return;
+      }
+
+      // Reautentica o usuário com a senha atual
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Atualiza o email se foi fornecido
+      if (newEmail && newEmail !== currentUser.email) {
+        await updateEmail(currentUser, newEmail);
+        // Atualiza também no documento do usuário
+        await onUpdateUser({ ...userData, email: newEmail });
+      }
+
+      // Atualiza a senha se foi fornecida
+      if (newPassword) {
+        await updatePassword(currentUser, newPassword);
+      }
+
+      alert("Email e/ou senha atualizados com sucesso! Por favor, faça login novamente.");
+      
+      // Limpa os campos
+      setCurrentPassword('');
+      setNewEmail('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setIsChangingCredentials(false);
+      
+    } catch (error: any) {
+      console.error("Erro ao alterar credenciais:", error);
+      
+      if (error.code === 'auth/wrong-password') {
+        alert("Senha atual incorreta.");
+      } else if (error.code === 'auth/email-already-in-use') {
+        alert("Este email já está em uso por outra conta.");
+      } else if (error.code === 'auth/invalid-email') {
+        alert("Email inválido.");
+      } else {
+        alert("Erro ao alterar email/senha: " + error.message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -139,6 +218,119 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                   </div>
                </div>
             </div>
+          </section>
+
+          {/* ✅ NOVA SEÇÃO: ALTERAR EMAIL E SENHA */}
+          <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
+                  <Lock size={24} />
+                </div>
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Segurança</h2>
+              </div>
+              
+              {!isChangingCredentials && (
+                <button
+                  onClick={() => setIsChangingCredentials(true)}
+                  className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
+                >
+                  <Key size={16} className="inline mr-2" /> Alterar Email/Senha
+                </button>
+              )}
+            </div>
+
+            {isChangingCredentials ? (
+              <form onSubmit={handleChangeCredentials} className="space-y-6">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <p className="text-xs font-bold text-amber-800">
+                    ⚠️ Por segurança, você precisa confirmar sua senha atual para fazer alterações.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Atual *</label>
+                  <input 
+                    type="password" 
+                    required
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Digite sua senha atual"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Novo Email (Opcional)</label>
+                    <input 
+                      type="email" 
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                      placeholder="novo@email.com"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Senha (Opcional)</label>
+                    <input 
+                      type="password" 
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+                </div>
+
+                {newPassword && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirmar Nova Senha</label>
+                    <input 
+                      type="password" 
+                      required
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Digite novamente"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-4">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? 'Processando...' : 'Confirmar Alteração'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsChangingCredentials(false);
+                      setCurrentPassword('');
+                      setNewEmail('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                    }}
+                    className="bg-slate-100 text-slate-600 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-slate-400 font-bold text-sm">
+                  Email atual: <span className="text-slate-800">{userData.email}</span>
+                </p>
+                <p className="text-slate-300 font-bold text-xs mt-2">
+                  Senha: ••••••••
+                </p>
+              </div>
+            )}
           </section>
         </div>
 
