@@ -286,7 +286,19 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
 
       <header className="flex flex-col md:flex-row justify-between items-center gap-6 print:hidden">
         <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Fluxo de Caixa</h1>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
+          <button 
+            onClick={() => setActiveFilter('Receitas')}
+            className="flex items-center gap-2 bg-emerald-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
+          >
+            <ArrowUpCircle size={18} /> Receitas
+          </button>
+          <button 
+            onClick={() => setActiveFilter('Despesas')}
+            className="flex items-center gap-2 bg-rose-500 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg"
+          >
+            <ArrowDownCircle size={18} /> Despesas
+          </button>
           <button 
             onClick={handleDownloadPDF}
             disabled={isGeneratingPDF}
