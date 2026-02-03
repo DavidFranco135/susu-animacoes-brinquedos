@@ -55,7 +55,7 @@ const PublicCatalog: React.FC = () => {
 
   // Função para gerar mensagem do WhatsApp
   const handleWhatsAppClick = (toyName: string) => {
-    const phone = company?.phone?.replace(/\D/g, '') || '5521970386065';
+    const phone = company?.phone?.replace(/\D/g, '') || '5521993638102';
     const message = encodeURIComponent(
       `Olá! Gostaria de solicitar um orçamento para: *${toyName}*`
     );
@@ -419,7 +419,8 @@ const PublicCatalog: React.FC = () => {
           </p>
           {company?.phone && (
             <p className="text-slate-500 font-medium text-xs">
-              WhatsApp: {2131321321} | Email: {company.email}
+              WhatsApp: {21-993638102} | Email: {'sususantos1234@outlook.com'}
+              {'Instagram: @susuanimacoesebrinquedos'}
             </p>
           )}
           <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
