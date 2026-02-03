@@ -29,7 +29,9 @@ const Inventory: React.FC<InventoryProps> = ({ toys, setToys, categories, setCat
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
-  const isAdmin = user?.role === UserRole.ADMIN;
+  
+  // ✅ CORREÇÃO: Aceita tanto enum quanto string "ADMIN"
+  const isAdmin = user?.role === UserRole.ADMIN || user?.role === 'ADMIN';
   
   const [formData, setFormData] = useState<Partial<Toy>>({
     name: '',
