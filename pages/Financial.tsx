@@ -3,7 +3,8 @@ import {
   TrendingUp, TrendingDown, Wallet, 
   ArrowUpCircle, ArrowDownCircle,
   BarChart3, Download, PieChart as PieChartIcon,
-  Activity, TrendingDown as TrendingDownIcon
+  Activity, TrendingDown as TrendingDownIcon,
+  Plus, X, Save
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -26,6 +27,16 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
   const [currentDate] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState<'Receitas' | 'Despesas' | 'Lucro' | 'AReceber'>('Lucro');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // ✅ NOVO: Estados para o modal de lançamento
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    type: 'EXPENSE' as 'EXPENSE' | 'INCOME',
+    description: '',
+    value: 0,
+    category: '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
@@ -94,6 +105,38 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
     });
   }, [stats]);
 
+  // ✅ NOVA FUNÇÃO: Salvar lançamento
+  const handleSaveTransaction = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.description || !formData.value || formData.value <= 0) {
+      alert('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    const newTransaction: FinancialTransaction = {
+      id: `t${Date.now()}`,
+      type: formData.type,
+      description: formData.description,
+      value: Number(formData.value),
+      category: formData.category || 'Outros',
+      date: formData.date
+    };
+
+    setTransactions([...transactions, newTransaction]);
+    
+    // Limpa o formulário
+    setFormData({
+      type: 'EXPENSE',
+      description: '',
+      value: 0,
+      category: '',
+      date: new Date().toISOString().split('T')[0]
+    });
+    
+    setIsModalOpen(false);
+  };
+
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
     
@@ -156,141 +199,46 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
         }
       }
 
-      const periodName = viewTab === 'Mês' 
-        ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-        : currentDate.getFullYear().toString();
+      pdf.save(`relatorio-financeiro-${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
       
-      pdf.save(`Relatorio-Financeiro-${periodName}.pdf`);
+      element.style.display = 'none';
+      element.style.position = '';
+      element.style.left = '';
       
-    } catch (err) {
-      console.error('Erro ao gerar PDF:', err);
-      alert("Erro ao gerar o PDF. Tente novamente.");
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o relatório PDF. Por favor, tente novamente.');
     } finally {
-      const element = document.getElementById('financial-report-print');
-      if (element) {
-        element.style.display = 'none';
-        element.style.position = '';
-        element.style.left = '';
-        element.style.top = '';
-        element.style.width = '';
-      }
       setIsGeneratingPDF(false);
     }
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 pb-20">
-      {/* Relatório oculto para PDF */}
-      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-16 text-slate-900">
-        <div className="border-b-4 border-slate-900 pb-10 mb-12 flex justify-between items-end">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-[32px] overflow-hidden border-2 border-slate-900">
-              {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" /> : <div className="w-full h-full bg-slate-100"/>}
-            </div>
-            <div>
-              <h1 className="text-4xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
-              <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-2">
-                {viewTab === 'Mês' 
-                  ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-                  : `Ano ${currentDate.getFullYear()}`}
-              </p>
-            </div>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-black opacity-40">GERADO EM</p>
-            <p className="font-black text-xl">{new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
+    <div className="space-y-8 pb-20">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Financeiro</h1>
+          <p className="text-slate-500 font-medium">
+            {viewTab === 'Mês' ? 
+              `${currentDate.toLocaleDateString('pt-BR', { month: 'long' })} de ${currentDate.getFullYear()}` :
+              currentDate.getFullYear()
+            }
+          </p>
         </div>
-
-        <div className="grid grid-cols-4 gap-8 mb-12">
-          <div className="bg-emerald-50 p-6 rounded-3xl border-2 border-emerald-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-emerald-600">Receitas</p>
-            <p className="text-3xl font-black text-emerald-700">R$ {stats.receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-red-50 p-6 rounded-3xl border-2 border-red-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-red-600">Despesas</p>
-            <p className="text-3xl font-black text-red-700">R$ {stats.despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-blue-50 p-6 rounded-3xl border-2 border-blue-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-blue-600">Lucro Líquido</p>
-            <p className="text-3xl font-black text-blue-700">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-amber-50 p-6 rounded-3xl border-2 border-amber-200">
-            <p className="text-[10px] font-black uppercase mb-2 text-amber-600">A Receber</p>
-            <p className="text-3xl font-black text-amber-700">R$ {stats.aReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-
-        <div className="space-y-10">
-          <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Receitas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Cliente</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredRentals.slice(0, 15).map(r => (
-                  <tr key={r.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{r.customerName}</td>
-                    <td className="py-3 text-right font-black text-emerald-700">R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-black uppercase mb-6 pb-3 border-b-2 border-slate-900">Despesas Detalhadas</h2>
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b-2 border-slate-900 uppercase font-black">
-                  <th className="py-3 text-left">Data</th>
-                  <th className="py-3 text-left">Descrição</th>
-                  <th className="py-3 text-left">Categoria</th>
-                  <th className="py-3 text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {stats.filteredTrans.filter(t => t.type === 'EXPENSE').slice(0, 15).map(t => (
-                  <tr key={t.id}>
-                    <td className="py-3 font-bold opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="py-3 font-black">{t.description}</td>
-                    <td className="py-3 uppercase text-[10px] opacity-60">{t.category}</td>
-                    <td className="py-3 text-right font-black text-red-700">R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-12 border-t-4 border-slate-900 pt-8 text-center">
-          <div className="bg-slate-900 text-white p-8 rounded-3xl">
-            <p className="text-sm font-black uppercase mb-3 opacity-60">Resultado Final do Período</p>
-            <p className="text-5xl font-black">R$ {stats.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-sm font-bold mt-3 uppercase">
-              Margem: {stats.receitas > 0 ? ((stats.lucro / stats.receitas) * 100).toFixed(1) : '0'}%
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-10 border-t pt-4 text-[9px] font-black uppercase opacity-40 text-center">
-          Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
-        </div>
-      </div>
-
-      <header className="flex flex-col md:flex-row justify-between items-center gap-6 print:hidden">
-        <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Fluxo de Caixa</h1>
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* ✅ NOVO BOTÃO: Lançar Despesa/Receita */}
           <button 
-            onClick={handleDownloadPDF}
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg"
+          >
+            <Plus size={18} strokeWidth={3} /> Novo Lançamento
+          </button>
+
+          <button 
+            onClick={handleDownloadPDF} 
             disabled={isGeneratingPDF}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50"
           >
             <Download size={18} /> {isGeneratingPDF ? 'Gerando...' : 'Relatório PDF'}
           </button>
@@ -443,6 +391,182 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* ✅ NOVO MODAL: Lançamento de Despesas/Receitas */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSaveTransaction} className="bg-white w-full max-w-2xl rounded-[40px] p-10 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Novo Lançamento</h2>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-slate-800 transition-all">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({...formData, type: 'EXPENSE'})}
+                className={`flex-1 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all ${
+                  formData.type === 'EXPENSE' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                <ArrowDownCircle size={18} className="inline mr-2" /> Despesa
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({...formData, type: 'INCOME'})}
+                className={`flex-1 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all ${
+                  formData.type === 'INCOME' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                <ArrowUpCircle size={18} className="inline mr-2" /> Receita
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Descrição *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20"
+                  value={formData.description}
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+                  placeholder="Ex: Aluguel, Combustível, Manutenção..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Valor (R$) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20"
+                    value={formData.value === 0 ? '' : formData.value}
+                    onChange={e => setFormData({...formData, value: Number(e.target.value)})}
+                    placeholder="0,00"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Data *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20"
+                    value={formData.date}
+                    onChange={e => setFormData({...formData, date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoria (Opcional)</label>
+                <input
+                  type="text"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20"
+                  value={formData.category}
+                  onChange={e => setFormData({...formData, category: e.target.value})}
+                  placeholder="Ex: Operacional, Marketing, Transporte..."
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black uppercase tracking-widest shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+            >
+              <Save size={18} /> Salvar Lançamento
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Elemento oculto para geração de PDF (mantém original) */}
+      <div id="financial-report-print" style={{display: 'none'}} className="bg-white p-16">
+        <div className="text-center mb-12 border-b-4 border-slate-900 pb-8">
+          <h1 className="text-5xl font-black text-slate-900 uppercase mb-4">Relatório Financeiro</h1>
+          <p className="text-slate-500 font-bold text-xl">
+            {viewTab === 'Mês' ? 
+              `${currentDate.toLocaleDateString('pt-BR', { month: 'long' })} de ${currentDate.getFullYear()}` :
+              `Ano de ${currentDate.getFullYear()}`
+            }
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-8 mb-12">
+          <div className="bg-emerald-50 p-8 rounded-3xl border-4 border-emerald-200">
+            <p className="text-sm font-black uppercase text-emerald-600 mb-2">Receitas</p>
+            <h3 className="text-4xl font-black text-emerald-700">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</h3>
+          </div>
+
+          <div className="bg-rose-50 p-8 rounded-3xl border-4 border-rose-200">
+            <p className="text-sm font-black uppercase text-rose-600 mb-2">Despesas</p>
+            <h3 className="text-4xl font-black text-rose-700">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</h3>
+          </div>
+
+          <div className="bg-blue-50 p-8 rounded-3xl border-4 border-blue-200">
+            <p className="text-sm font-black uppercase text-blue-600 mb-2">Lucro</p>
+            <h3 className="text-4xl font-black text-blue-700">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</h3>
+          </div>
+
+          <div className="bg-amber-50 p-8 rounded-3xl border-4 border-amber-200">
+            <p className="text-sm font-black uppercase text-amber-600 mb-2">A Receber</p>
+            <h3 className="text-4xl font-black text-amber-700">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</h3>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <h2 className="text-2xl font-black text-slate-900 uppercase border-b-2 border-slate-200 pb-4">Detalhamento</h2>
+          
+          <div>
+            <h3 className="text-lg font-black text-emerald-600 uppercase mb-4">Receitas</h3>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="px-4 py-3 font-black text-xs uppercase">Descrição</th>
+                  <th className="px-4 py-3 font-black text-xs uppercase">Data</th>
+                  <th className="px-4 py-3 font-black text-xs uppercase text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.filteredRentals.map(r => (
+                  <tr key={r.id} className="border-b">
+                    <td className="px-4 py-3 font-bold text-sm">Entrada: {r.customerName}</td>
+                    <td className="px-4 py-3 text-slate-500 text-sm">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                    <td className="px-4 py-3 text-emerald-600 font-black text-right">R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black text-rose-600 uppercase mb-4">Despesas</h3>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="px-4 py-3 font-black text-xs uppercase">Descrição</th>
+                  <th className="px-4 py-3 font-black text-xs uppercase">Data</th>
+                  <th className="px-4 py-3 font-black text-xs uppercase text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.filteredTrans.map(t => (
+                  <tr key={t.id} className="border-b">
+                    <td className="px-4 py-3 font-bold text-sm">{t.description}</td>
+                    <td className="px-4 py-3 text-slate-500 text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-4 py-3 text-rose-600 font-black text-right">R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
