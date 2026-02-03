@@ -218,6 +218,19 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
                 <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
               </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone (WhatsApp)</label>
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.phone || ''} onChange={e => setCompanyData({...companyData, phone: e.target.value})} placeholder="(21) 00000-0000" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Comercial</label>
+                <input type="email" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.email || ''} onChange={e => setCompanyData({...companyData, email: e.target.value})} placeholder="contato@empresa.com" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Completo</label>
+              <textarea rows={2} className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold resize-none" value={companyData.address || ''} onChange={e => setCompanyData({...companyData, address: e.target.value})} placeholder="Rua, número, complemento, bairro, cidade - UF, CEP" />
             </div>
           </section>
 
