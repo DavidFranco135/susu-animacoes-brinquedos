@@ -185,15 +185,15 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
                   <div className="w-20 h-20 rounded-[28px] overflow-hidden border-2 border-slate-900 mb-2">
                       {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" /> : <div className="w-full h-full bg-slate-100"/>}
                   </div>
-                  <h1 className="text-2xl font-black uppercase tracking-tight">{Title}</h1>
-                  <div className="text-[10px] uppercase font-bold text-slate-500">
+                  <h1 className="text-3xl font-black uppercase tracking-tight">{Title}</h1>
+                  <div className="text-sm uppercase font-bold text-slate-500">
                       <p>{company.name} | CNPJ: {company.cnpj}</p>
                       <p>{company.address}</p>
                       <p>Contatos: {company.phone} | {company.email}</p>
                   </div>
                 </div>
                 
-                <div className="space-y-4 text-sm">
+                <div className="space-y-4 text-base">
                   <div className="bg-slate-50 p-6 rounded-3xl space-y-2 border border-slate-100">
                       <p><strong>CLIENTE / LOCATÁRIO:</strong> {selectedRental.customerName}</p>
                       <p><strong>DOC:</strong> {customers.find(c=>c.id===selectedRental.customerId)?.cnpj || customers.find(c=>c.id===selectedRental.customerId)?.cpf || 'Não informado'}</p>
@@ -202,31 +202,31 @@ const DocumentsPage: React.FC<Props> = ({ type, rentals, customers, company }) =
 
                   <div className="bg-slate-900 text-white p-8 rounded-[32px] grid grid-cols-2 gap-4">
                       <div>
-                          <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Valor Total</p>
-                          <p className="text-2xl font-black">R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
+                          <p className="text-xs font-black uppercase text-slate-500 mb-1">Valor Total</p>
+                          <p className="text-3xl font-black">R$ {selectedRental.totalValue.toLocaleString('pt-BR')}</p>
                       </div>
                       <div className="text-right">
-                          <p className="text-[9px] font-black uppercase text-emerald-500 mb-1">Status de Pagamento</p>
-                          <p className="text-2xl font-black text-emerald-400">R$ {selectedRental.entryValue.toLocaleString('pt-BR')} (Pago)</p>
+                          <p className="text-xs font-black uppercase text-emerald-500 mb-1">Status de Pagamento</p>
+                          <p className="text-3xl font-black text-emerald-400">R$ {selectedRental.entryValue.toLocaleString('pt-BR')} (Pago)</p>
                       </div>
                   </div>
 
                   <div className="pt-6 space-y-4">
-                      <p className="font-bold uppercase text-[10px] text-slate-400 mb-2 tracking-widest">Condições de Locação</p>
-                      <div className="text-xs text-justify whitespace-pre-line leading-relaxed italic opacity-80">
+                      <p className="font-bold uppercase text-sm text-slate-400 mb-2 tracking-widest">Condições de Locação</p>
+                      <div className="text-base text-justify whitespace-pre-line leading-relaxed italic opacity-80">
                           {type === 'contract' ? contractTerms : `Declaramos para os devidos fins que recebemos de ${selectedRental.customerName} a quantia de R$ ${selectedRental.totalValue.toLocaleString('pt-BR')} quitando integralmente o serviço de locação prestado.`}
                       </div>
                   </div>
 
                   {contractImage && type === 'contract' && (
                       <div className="pt-10">
-                          <p className="font-bold uppercase text-[10px] text-slate-400 mb-4 tracking-widest">Anexo do Contrato</p>
+                          <p className="font-bold uppercase text-sm text-slate-400 mb-4 tracking-widest">Anexo do Contrato</p>
                           <img src={contractImage} className="w-full h-72 object-cover rounded-3xl border" alt="Anexo" />
                       </div>
                   )}
                 </div>
 
-                <div className="pt-32 grid grid-cols-2 gap-16 text-center text-[10px] font-black uppercase tracking-widest">
+                <div className="pt-32 grid grid-cols-2 gap-16 text-center text-sm font-black uppercase tracking-widest">
                   <div className="border-t-2 border-slate-900 pt-3">{company.name}</div>
                   <div className="border-t-2 border-slate-900 pt-3">{selectedRental.customerName}</div>
                 </div>
