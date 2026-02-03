@@ -30,7 +30,7 @@ import CustomersPage from './pages/CustomersPage';
 import BudgetsPage from './pages/BudgetsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import PublicRentalSummary from './pages/PublicRentalSummary';
-import PublicCatalog from './PublicCatalog'; // ← NOVO IMPORT
+import PublicCatalog from './PublicCatalog';
 import { Customer, Toy, Rental, User, UserRole, FinancialTransaction, CompanySettings as CompanyType } from './types';
 import { User as UserIcon, Loader2, ExternalLink } from 'lucide-react';
 
@@ -95,7 +95,7 @@ const Login: React.FC<{ company: CompanyType | null }> = ({ company }) => {
           </button>
         </form>
         
-        {/* ← NOVO BOTÃO PARA ACESSAR O CATÁLOGO PÚBLICO */}
+        {/* ← BOTÃO PARA ACESSAR O CATÁLOGO PÚBLICO */}
         <div className="w-full mt-6 pt-6 border-t border-slate-200">
           <a 
             href="#/catalogo" 
@@ -192,7 +192,7 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        {/* ← NOVA ROTA PÚBLICA DO CATÁLOGO */}
+        {/* ← ROTA PÚBLICA DO CATÁLOGO */}
         <Route path="/catalogo" element={<PublicCatalog />} />
         
         <Route path="/resumo/:id" element={<PublicRentalSummary rentals={rentals} toys={toys} company={company || {} as CompanyType} />} />
@@ -207,10 +207,17 @@ const App: React.FC = () => {
                   n.forEach((r: Rental) => setDoc(doc(db, "rentals", r.id), r)); 
                 }} customers={customers} toys={toys} /> : <Navigate to="/" />} />
                 
-                <Route path="/brinquedos" element={hasAccess('toys') ? <Inventory toys={toys} setToys={(a: any) => { 
-                  const n = typeof a === 'function' ? a(toys) : a; 
-                  n.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t)); 
-                }} categories={categories} setCategories={(c) => setDoc(doc(db, "settings", "categories"), { list: c })} /> : <Navigate to="/reservas" />} />
+                {/* ← CORRIGIDO: Agora passa user={user} para Inventory */}
+                <Route path="/brinquedos" element={hasAccess('toys') ? <Inventory 
+                  toys={toys} 
+                  setToys={(a: any) => { 
+                    const n = typeof a === 'function' ? a(toys) : a; 
+                    n.forEach((t: Toy) => setDoc(doc(db, "toys", t.id), t)); 
+                  }} 
+                  categories={categories} 
+                  setCategories={(c) => setDoc(doc(db, "settings", "categories"), { list: c })}
+                  user={user}
+                /> : <Navigate to="/reservas" />} />
                 
                 <Route path="/clientes" element={hasAccess('customers') ? <CustomersPage customers={customers} setCustomers={(a: any) => { 
                   const n = typeof a === 'function' ? a(customers) : a; 
