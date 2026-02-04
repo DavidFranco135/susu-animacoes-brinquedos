@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon, FileText } from 'lucide-react';
 import { CompanySettings, User, UserRole } from '../types';
-import { getAuth, updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+// ✅ IMPORTAR AS INSTÂNCIAS CORRETAS DO FIREBASE
+import { auth, db } from '../firebase';
 
 interface Props {
   company: CompanySettings;
@@ -27,9 +29,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
-
-  const auth = getAuth();
-  const db = getFirestore();
 
   // Função genérica para processar imagem para Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
@@ -110,6 +109,8 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
       const currentUser = auth.currentUser;
       
       console.log("👤 Usuário atual:", currentUser?.email);
+      console.log("🔧 Auth instance:", auth);
+      console.log("🔧 DB instance:", db);
       
       if (!currentUser || !currentUser.email) {
         alert("❌ Usuário não autenticado. Faça login novamente.");
@@ -219,13 +220,14 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
             email: newEmail,
             uid: newUid 
           });
-          console.log("✅ Settings/admin atualizado");
+          console.log("✅ Settings/admin atualizado com sucesso!");
         } catch (settingsError: any) {
-          console.error("⚠️ Aviso ao atualizar settings/admin:", settingsError);
-          // Não é crítico se falhar
+          console.error("❌ Erro ao atualizar settings/admin:", settingsError);
+          alert("⚠️ Aviso: Novo admin criado, mas houve erro ao atualizar configurações: " + settingsError.message);
+          // Continua mesmo com erro
         }
 
-        // PASSO 4: Remove o documento do admin antigo do Firestore (OPCIONAL - mas recomendado para limpeza)
+        // PASSO 4: Remove o documento do admin antigo do Firestore
         try {
           console.log("🗑️ Removendo documento do admin antigo...");
           await deleteDoc(doc(db, "users", oldUid));
