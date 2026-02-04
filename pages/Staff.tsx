@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Plus, X, Loader2, ShieldCheck, Shield } from 'lucide-react';
+import { Trash2, Plus, X, Loader2 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getFirestore, doc, deleteDoc, setDoc } from "firebase/firestore";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -14,16 +14,17 @@ const Staff: React.FC<Props> = ({ staff }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: UserRole.STAFF });
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("⚠️ EXCLUIR USUÁRIO?\nOs dados sumirão do banco imediatamente.")) return;
+  const handleDelete = async (userId: string) => {
+    if (!window.confirm("⚠️ ATENÇÃO: Deseja excluir este colaborador permanentemente?")) return;
     
     setLoading(true);
     try {
       const db = getFirestore();
-      await deleteDoc(doc(db, "users", id));
-      // A lista atualiza sozinha via onSnapshot no App.tsx
-    } catch (e) {
-      alert("Erro ao excluir!");
+      // Deleta direto do banco. O App.tsx vai notar a falta e atualizar a tela.
+      await deleteDoc(doc(db, "users", userId));
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao excluir do banco de dados.");
     } finally {
       setLoading(false);
     }
@@ -37,39 +38,48 @@ const Staff: React.FC<Props> = ({ staff }) => {
       const db = getFirestore();
       const res = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       
-      const newUser = {
+      await setDoc(doc(db, "users", res.user.uid), {
         id: res.user.uid,
         name: formData.name,
         email: formData.email,
         role: formData.role,
         allowedPages: []
-      };
+      });
 
-      await setDoc(doc(db, "users", res.user.uid), newUser);
       setIsModalOpen(false);
+      setFormData({ name: '', email: '', password: '', role: UserRole.STAFF });
     } catch (e: any) {
-      alert("Erro: " + e.message);
+      alert("Erro ao criar: " + e.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between mb-8">
-        <h1 className="text-2xl font-black uppercase">Colaboradores</h1>
-        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Novo</button>
+    <div className="p-8 max-w-6xl mx-auto">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-black uppercase tracking-tighter">Colaboradores</h1>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs"
+        >
+          Novo Acesso
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {staff.map(u => (
-          <div key={u.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex justify-between items-center">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {staff.map((u) => (
+          <div key={u.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex justify-between items-center group">
             <div>
-              <p className="font-black uppercase text-slate-800">{u.name}</p>
-              <p className="text-xs text-slate-400">{u.email}</p>
-              <p className="text-[10px] font-bold text-blue-600 uppercase mt-2">{u.role}</p>
+              <p className="font-black uppercase text-slate-800 leading-tight">{u.name}</p>
+              <p className="text-xs text-slate-400 font-bold mb-2">{u.email}</p>
+              <span className="text-[9px] bg-slate-100 px-2 py-1 rounded-md font-black uppercase">{u.role}</span>
             </div>
-            <button onClick={() => handleDelete(u.id)} className="p-3 text-red-500 hover:bg-red-50 rounded-2xl transition-all">
+            <button 
+              onClick={() => handleDelete(u.id)}
+              className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+              title="Excluir Usuário"
+            >
               <Trash2 size={20} />
             </button>
           </div>
@@ -77,22 +87,34 @@ const Staff: React.FC<Props> = ({ staff }) => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleCreate} className="bg-white p-8 rounded-[40px] w-full max-w-md">
-            <h2 className="font-black uppercase mb-6">Novo Colaborador</h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleCreate} className="bg-white p-8 rounded-[40px] w-full max-w-md shadow-2xl">
+            <div className="flex justify-between mb-6">
+              <h2 className="font-black uppercase">Criar Novo Acesso</h2>
+              <button type="button" onClick={() => setIsModalOpen(false)}><X /></button>
+            </div>
+            
             <div className="space-y-4">
-              <input placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl" onChange={e=>setFormData({...formData, name: e.target.value})} required />
-              <input placeholder="E-mail" type="email" className="w-full p-4 bg-slate-50 rounded-2xl" onChange={e=>setFormData({...formData, email: e.target.value})} required />
-              <input placeholder="Senha" type="password" className="w-full p-4 bg-slate-50 rounded-2xl" onChange={e=>setFormData({...formData, password: e.target.value})} required />
-              <select className="w-full p-4 bg-slate-50 rounded-2xl font-bold" onChange={e=>setFormData({...formData, role: e.target.value as UserRole})}>
-                <option value={UserRole.STAFF}>Colaborador</option>
-                <option value={UserRole.ADMIN}>Administrador</option>
+              <input placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" onChange={e=>setFormData({...formData, name: e.target.value})} required />
+              <input placeholder="E-mail" type="email" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" onChange={e=>setFormData({...formData, email: e.target.value})} required />
+              <input placeholder="Senha" type="password" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" onChange={e=>setFormData({...formData, password: e.target.value})} required />
+              <select 
+                className="w-full p-4 bg-slate-50 rounded-2xl font-bold"
+                value={formData.role}
+                onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
+              >
+                <option value={UserRole.STAFF}>Colaborador (Restrito)</option>
+                <option value={UserRole.ADMIN}>Administrador (Total)</option>
               </select>
             </div>
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase mt-6">
-              {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Criar Acesso'}
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase mt-6 shadow-lg shadow-blue-200"
+            >
+              {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Confirmar e Criar'}
             </button>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="w-full text-slate-400 font-bold uppercase text-xs mt-4">Cancelar</button>
           </form>
         </div>
       )}
