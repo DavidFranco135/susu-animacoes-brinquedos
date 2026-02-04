@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon, History, RotateCcw } from 'lucide-react';
 import { CompanySettings, User } from '../types';
 import { auth } from '../firebase';
 import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -9,6 +9,12 @@ interface Props {
   setCompany: (c: CompanySettings) => void;
   user: User;
   onUpdateUser: (u: User) => void;
+}
+
+interface EmailHistoryEntry {
+  email: string;
+  date: string;
+  uid?: string;
 }
 
 const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser }) => {
@@ -24,9 +30,169 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // ✅ NOVO: Estados para histórico de emails
+  const [emailHistory, setEmailHistory] = useState<EmailHistoryEntry[]>([]);
+  const [showEmailHistory, setShowEmailHistory] = useState(false);
+  
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
+
+  // ✅ NOVO: Carregar histórico de emails ao montar o componente
+  useEffect(() => {
+    const loadEmailHistory = async () => {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        
+        const historyDoc = await getDoc(doc(db, "settings", "adminHistory"));
+        if (historyDoc.exists()) {
+          const data = historyDoc.data();
+          setEmailHistory(data.emails || []);
+        }
+      } catch (error) {
+        console.log("Erro ao carregar histórico:", error);
+      }
+    };
+    
+    loadEmailHistory();
+  }, []);
+
+  // ✅ NOVO: Função para salvar histórico de email
+  const saveEmailToHistory = async (email: string, uid: string) => {
+    try {
+      const { doc, setDoc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      
+      const historyDoc = await getDoc(doc(db, "settings", "adminHistory"));
+      let currentHistory: EmailHistoryEntry[] = [];
+      
+      if (historyDoc.exists()) {
+        currentHistory = historyDoc.data().emails || [];
+      }
+      
+      // Adicionar novo email ao histórico (se não existir)
+      const emailExists = currentHistory.some(entry => entry.email === email);
+      if (!emailExists) {
+        const newEntry: EmailHistoryEntry = {
+          email,
+          date: new Date().toISOString(),
+          uid
+        };
+        
+        currentHistory.unshift(newEntry); // Adiciona no início
+        
+        // Manter apenas os últimos 10 emails
+        if (currentHistory.length > 10) {
+          currentHistory = currentHistory.slice(0, 10);
+        }
+        
+        await setDoc(doc(db, "settings", "adminHistory"), { emails: currentHistory });
+        setEmailHistory(currentHistory);
+      }
+    } catch (error) {
+      console.log("Erro ao salvar histórico:", error);
+    }
+  };
+
+  // ✅ NOVO: Função para recuperar email anterior
+  const handleRecoverEmail = async (previousEmail: string, previousUid?: string) => {
+    if (!confirm(`Deseja recuperar o email anterior?\n\n📧 Email: ${previousEmail}\n\n⚠️ ATENÇÃO:\n- Você precisará definir uma NOVA SENHA\n- Será deslogado automaticamente\n- Faça login com o email recuperado e a nova senha`)) {
+      return;
+    }
+
+    const newPasswordPrompt = prompt("Digite uma NOVA SENHA para este email (mínimo 6 caracteres):");
+    if (!newPasswordPrompt || newPasswordPrompt.length < 6) {
+      alert("❌ Senha inválida. Mínimo 6 caracteres.");
+      return;
+    }
+
+    const currentPasswordPrompt = prompt("Para confirmar, digite sua SENHA ATUAL:");
+    if (!currentPasswordPrompt) {
+      alert("❌ Senha atual é obrigatória.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser || !currentUser.email) {
+        alert("❌ Usuário não autenticado.");
+        setIsSaving(false);
+        return;
+      }
+
+      const { setDoc, doc, deleteDoc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+
+      // Reautentica
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPasswordPrompt);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      const oldUid = currentUser.uid;
+      const oldEmail = currentUser.email;
+
+      // Salvar email atual no histórico antes de mudar
+      await saveEmailToHistory(oldEmail, oldUid);
+
+      // Criar novo usuário com email recuperado
+      let newUserCredential;
+      try {
+        newUserCredential = await createUserWithEmailAndPassword(auth, previousEmail, newPasswordPrompt);
+      } catch (authError: any) {
+        if (authError.code === 'auth/email-already-in-use') {
+          alert("❌ Este email já está cadastrado.\n\nSe você não consegue acessá-lo, use a opção 'Esqueci minha senha' no login.");
+        } else {
+          alert("❌ Erro ao criar usuário: " + authError.message);
+        }
+        setIsSaving(false);
+        return;
+      }
+
+      const newUid = newUserCredential.user.uid;
+
+      // Criar documento do admin recuperado
+      const recoveredAdminData = {
+        ...userData,
+        id: newUid,
+        email: previousEmail
+      };
+
+      await setDoc(doc(db, "users", newUid), recoveredAdminData);
+      await setDoc(doc(db, "settings", "admin"), { email: previousEmail, uid: newUid });
+
+      // Remover documento antigo
+      try {
+        await deleteDoc(doc(db, "users", oldUid));
+      } catch (deleteError) {
+        console.log("Aviso ao remover documento:", deleteError);
+      }
+
+      alert(`✅ EMAIL RECUPERADO COM SUCESSO!
+
+📧 Email recuperado: ${previousEmail}
+🔐 Nova senha: definida
+👑 Permissões: ADMIN
+
+Você será deslogado em 3 segundos.
+Faça login com o email recuperado e a nova senha.`);
+
+      setTimeout(async () => {
+        await signOut(auth);
+      }, 3000);
+
+    } catch (error: any) {
+      console.error("Erro ao recuperar email:", error);
+      if (error.code === 'auth/wrong-password') {
+        alert("❌ Senha atual incorreta.");
+      } else {
+        alert("❌ Erro: " + error.message);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Função genérica para processar imagem para Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
@@ -140,6 +306,9 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
         const oldUid = currentUser.uid;
         const oldEmail = currentUser.email;
 
+        // ✅ NOVO: Salvar email atual no histórico antes de mudar
+        await saveEmailToHistory(oldEmail, oldUid);
+
         // PASSO 1: Criar NOVO usuário no Firebase Authentication
         let newUserCredential;
         try {
@@ -211,7 +380,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 ⚠️ IMPORTANTE:
 - Você será deslogado em 3 segundos
 - Faça login com o NOVO email e senha
-- Email antigo: ${oldEmail} (sem acesso)`;
+- Email antigo salvo no histórico: ${oldEmail}`;
 
         alert(successMessage);
 
@@ -359,15 +528,72 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Segurança</h2>
               </div>
               
-              {!isChangingCredentials && (
-                <button
-                  onClick={() => setIsChangingCredentials(true)}
-                  className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
-                >
-                  <Key size={16} className="inline mr-2" /> Alterar Email/Senha
-                </button>
-              )}
+              <div className="flex gap-2">
+                {/* ✅ NOVO: Botão para ver histórico */}
+                {emailHistory.length > 0 && (
+                  <button
+                    onClick={() => setShowEmailHistory(!showEmailHistory)}
+                    className="bg-slate-100 text-slate-600 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-50 hover:text-green-600 transition-all"
+                    title="Ver histórico de emails"
+                  >
+                    <History size={16} className="inline" />
+                  </button>
+                )}
+                
+                {!isChangingCredentials && (
+                  <button
+                    onClick={() => setIsChangingCredentials(true)}
+                    className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
+                  >
+                    <Key size={16} className="inline mr-2" /> Alterar Email/Senha
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* ✅ NOVO: Histórico de Emails */}
+            {showEmailHistory && emailHistory.length > 0 && (
+              <div className="p-6 bg-green-50 border-2 border-green-200 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-green-900 uppercase tracking-widest flex items-center gap-2">
+                    <History size={16} /> Histórico de Emails Admin
+                  </h3>
+                  <button
+                    onClick={() => setShowEmailHistory(false)}
+                    className="text-green-600 hover:text-green-800 text-xs font-bold"
+                  >
+                    ✕ Fechar
+                  </button>
+                </div>
+                
+                <p className="text-xs text-green-700 font-bold">
+                  Emails anteriores que foram usados como admin. Você pode recuperar qualquer um deles.
+                </p>
+
+                <div className="space-y-2">
+                  {emailHistory.map((entry, index) => (
+                    <div 
+                      key={index}
+                      className="bg-white p-4 rounded-xl border border-green-200 flex items-center justify-between"
+                    >
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-800 text-sm">{entry.email}</p>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          Alterado em: {new Date(entry.date).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRecoverEmail(entry.email, entry.uid)}
+                        disabled={isSaving || entry.email === userData.email}
+                        className="bg-green-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-green-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <RotateCcw size={14} /> Recuperar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {isChangingCredentials ? (
               <form onSubmit={handleChangeCredentials} className="space-y-6">
@@ -438,7 +664,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                   </p>
                   <p className="text-xs text-blue-600 mt-2">
                     {newEmail 
-                      ? "Um novo usuário será criado automaticamente no sistema. Após a alteração, você será deslogado."
+                      ? "Um novo usuário será criado automaticamente. O email atual será salvo no histórico e poderá ser recuperado depois."
                       : "Após a alteração, faça logout e entre com as novas credenciais."
                     }
                   </p>
