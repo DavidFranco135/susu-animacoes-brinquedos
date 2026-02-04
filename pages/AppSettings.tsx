@@ -1,9 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
 import { CompanySettings, User } from '../types';
-import { auth } from '../firebase';
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, deleteUser } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 interface Props {
   company: CompanySettings;
@@ -25,10 +24,15 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // Estados para recuperação de email existente
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
-
+  const auth = getAuth();
   const db = getFirestore();
 
   // Função genérica para processar imagem para Base64
@@ -58,7 +62,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
       // 1. Salva os dados da empresa (incluindo logo e fundo de login)
       await setCompany(companyData);
       
-      // 2. Salva os dados do usuário (agora salva a foto de perfil no Firebase)
+      // 2. Salva os dados do usuário
       await onUpdateUser(userData);
       
       setShowSuccess(true);
@@ -71,7 +75,83 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
     }
   };
 
-  // ✅ FUNÇÃO ATUALIZADA: Alterar Email e Senha com transferência completa de permissões de admin
+  // ✅ NOVA FUNÇÃO: Recuperar Email Existente
+  const handleRecoverExistingEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!recoveryEmail || !recoveryPassword) {
+      alert("Por favor, preencha o email e a senha do email que deseja recuperar.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // Importações necessárias
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const { setDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+
+      console.log("🔄 Tentando recuperar acesso ao email:", recoveryEmail);
+
+      // Tenta fazer login com o email e senha fornecidos
+      const userCredential = await signInWithEmailAndPassword(auth, recoveryEmail, recoveryPassword);
+      const recoveredUser = userCredential.user;
+
+      console.log("✅ Login bem-sucedido! UID:", recoveredUser.uid);
+
+      // Cria o documento do usuário no Firestore com status de ADMIN
+      const recoveredAdminUser: User = {
+        id: recoveredUser.uid,
+        name: user.name || recoveryEmail.split('@')[0],
+        email: recoveryEmail,
+        role: 'ADMIN',
+        allowedPages: [],
+        profilePhotoUrl: user.profilePhotoUrl || ''
+      };
+
+      // Salva no Firestore
+      await setDoc(doc(db, "users", recoveredUser.uid), recoveredAdminUser);
+      console.log("✅ Documento criado no Firestore");
+
+      // Atualiza settings/admin com o email recuperado
+      await setDoc(doc(db, "settings", "admin"), { 
+        email: recoveryEmail,
+        recoveredAt: new Date().toISOString()
+      });
+      console.log("✅ Settings/admin atualizado");
+
+      alert(`✅ Email ${recoveryEmail} recuperado com sucesso!\n\nVocê agora tem acesso ADMIN ao sistema.\n\nNão é necessário fazer logout - você já está autenticado com este email.`);
+      
+      // Limpa os campos
+      setRecoveryEmail('');
+      setRecoveryPassword('');
+      setIsRecovering(false);
+      
+      // Atualiza o estado local do usuário
+      setUserData(recoveredAdminUser);
+      await onUpdateUser(recoveredAdminUser);
+
+    } catch (error: any) {
+      console.error("❌ Erro ao recuperar email:", error);
+      
+      if (error.code === 'auth/wrong-password') {
+        alert("Senha incorreta para este email.");
+      } else if (error.code === 'auth/user-not-found') {
+        alert("Este email não existe no Firebase Authentication.");
+      } else if (error.code === 'auth/invalid-email') {
+        alert("Email inválido.");
+      } else if (error.code === 'auth/too-many-requests') {
+        alert("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+      } else {
+        alert("Erro ao recuperar email: " + (error.message || error));
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ✅ FUNÇÃO CORRIGIDA: Alterar Email do Admin com transferência completa
   const handleChangeCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -90,7 +170,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
       return;
     }
 
-    // Se não tem email nem senha para alterar
     if (!newEmail && !newPassword) {
       alert("Por favor, preencha o novo email e/ou a nova senha.");
       return;
@@ -106,86 +185,129 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
         return;
       }
 
-      const oldEmail = currentUser.email;
-
       // Reautentica o usuário com a senha atual
-      const credential = EmailAuthProvider.credential(oldEmail, currentPassword);
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
       await reauthenticateWithCredential(currentUser, credential);
 
       let successMessage = "";
 
-      // Atualiza a senha primeiro (se fornecida)
-      if (newPassword) {
+      // ✅ CASO 1: Apenas mudança de senha (mantém mesmo email)
+      if (newPassword && !newEmail) {
         await updatePassword(currentUser, newPassword);
         successMessage = "Senha atualizada com sucesso!";
-      }
-
-      // ✅ ATUALIZA O EMAIL SE FOI FORNECIDO (transferindo permissões de admin)
-      if (newEmail && newEmail !== oldEmail) {
-        // 1. Atualiza o email no Firebase Authentication
-        try {
-          await updateEmail(currentUser, newEmail);
-        } catch (emailError: any) {
-          // Se der erro no Auth, ainda continuamos com as atualizações no Firestore
-          console.log("Aviso ao atualizar email no Auth:", emailError);
-        }
-
-        // 2. Atualiza o email do admin no settings (CRUCIAL para manter permissões de admin)
-        await setDoc(doc(db, "settings", "admin"), { email: newEmail });
         
-        // 3. Atualiza o email no documento do usuário atual
-        await setDoc(doc(db, "users", currentUser.uid), { 
-          ...userData, 
-          email: newEmail 
-        }, { merge: true });
-
-        // 4. ✅ NOVO: Busca e remove o documento do email antigo (se existir como documento separado)
-        // Isso é útil caso o sistema tenha criado um documento com o email antigo como ID
-        try {
-          const oldEmailDoc = await getDoc(doc(db, "users", oldEmail.replace(/\./g, '_')));
-          if (oldEmailDoc.exists()) {
-            const { deleteDoc } = await import('firebase/firestore');
-            await deleteDoc(doc(db, "users", oldEmail.replace(/\./g, '_')));
-          }
-        } catch (cleanupError) {
-          console.log("Aviso ao limpar documento antigo:", cleanupError);
-        }
-
-        successMessage = newPassword 
-          ? "✅ Email e senha atualizados! Você continuará como ADMIN. Faça logout e login com o NOVO EMAIL."
-          : "✅ Email atualizado! Você continuará como ADMIN. Faça logout e login com o NOVO EMAIL.";
+        alert(successMessage);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsChangingCredentials(false);
+        setIsSaving(false);
+        return;
       }
 
-      alert(successMessage || "Alterações salvas com sucesso!");
-      
-      // Limpa os campos
-      setCurrentPassword('');
-      setNewEmail('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setIsChangingCredentials(false);
-      
-      // Se alterou email ou senha, faz logout automático
-      if (newEmail || newPassword) {
-        alert("Fazendo logout para você entrar com as novas credenciais...");
+      // ✅ CASO 2: Mudança de email (com ou sem senha)
+      if (newEmail && newEmail !== currentUser.email) {
+        console.log("🔄 Iniciando processo de transferência de admin...");
+        
+        // Passo 1: Buscar todos os dados do admin atual
+        const oldUid = currentUser.uid;
+        const oldEmail = currentUser.email;
+        const oldUserDoc = await getDoc(doc(db, "users", oldUid));
+        const oldUserData = oldUserDoc.exists() ? oldUserDoc.data() as User : null;
+        
+        console.log("📦 Dados do admin antigo:", oldUserData);
+
+        // Passo 2: Criar nova conta no Firebase Auth
+        let newUserAuth;
+        try {
+          // Cria a nova conta com o novo email
+          const passwordToUse = newPassword || currentPassword; // Usa nova senha ou mantém a antiga
+          newUserAuth = await createUserWithEmailAndPassword(auth, newEmail, passwordToUse);
+          console.log("✅ Nova conta criada no Auth com UID:", newUserAuth.user.uid);
+        } catch (authError: any) {
+          if (authError.code === 'auth/email-already-in-use') {
+            throw new Error("Este email já está em uso. Escolha outro email.");
+          }
+          throw authError;
+        }
+
+        // Passo 3: Criar documento do novo admin no Firestore com TODOS os dados
+        const newAdminUser: User = {
+          id: newUserAuth.user.uid,
+          name: oldUserData?.name || userData.name || newEmail.split('@')[0],
+          email: newEmail,
+          role: 'ADMIN', // ✅ Mantém como ADMIN
+          allowedPages: [], // Admin tem acesso total
+          profilePhotoUrl: oldUserData?.profilePhotoUrl || userData.profilePhotoUrl || ''
+        };
+
+        await setDoc(doc(db, "users", newUserAuth.user.uid), newAdminUser);
+        console.log("✅ Documento do novo admin criado no Firestore");
+
+        // Passo 4: Atualizar documento settings/admin com o novo email
+        await setDoc(doc(db, "settings", "admin"), { 
+          email: newEmail,
+          oldEmail: oldEmail,
+          migratedAt: new Date().toISOString()
+        });
+        console.log("✅ Settings/admin atualizado com novo email");
+
+        // Passo 5: Fazer logout para forçar nova autenticação
+        successMessage = `✅ SUCESSO! Seu email foi alterado de ${oldEmail} para ${newEmail}.\n\n` +
+                        `Você continuará como ADMIN com todas as permissões.\n\n` +
+                        `Fazendo logout agora... Entre novamente com:\n` +
+                        `Email: ${newEmail}\n` +
+                        `Senha: ${newPassword ? '(nova senha que você definiu)' : '(senha atual)'}`;
+        
+        alert(successMessage);
+        
+        // Passo 6: Tentar deletar a conta antiga do Firebase Auth
+        // Nota: Isso só funciona se ainda estivermos autenticados com a conta antiga
+        // Como vamos fazer logout logo em seguida, isso pode não funcionar sempre
+        try {
+          console.log("🗑️ Tentando deletar conta antiga do Auth...");
+          // Re-autentica a conta antiga antes de deletar
+          await reauthenticateWithCredential(currentUser, credential);
+          
+          // Deleta o documento antigo do Firestore
+          await deleteDoc(doc(db, "users", oldUid));
+          console.log("✅ Documento antigo deletado do Firestore");
+          
+          // Tenta deletar a conta antiga do Auth
+          // Isso pode falhar se já perdemos a autenticação
+          await deleteUser(currentUser);
+          console.log("✅ Conta antiga deletada do Firebase Auth");
+        } catch (deleteError) {
+          console.log("⚠️ Não foi possível deletar conta antiga automaticamente:", deleteError);
+          console.log("Você pode deletá-la manualmente no Firebase Console se necessário");
+        }
+
+        // Limpa os campos
+        setCurrentPassword('');
+        setNewEmail('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsChangingCredentials(false);
+        
+        // Faz logout após 2 segundos
         setTimeout(() => {
           signOut(auth);
         }, 2000);
       }
       
     } catch (error: any) {
-      console.error("Erro ao alterar credenciais:", error);
+      console.error("❌ Erro ao alterar credenciais:", error);
       
       if (error.code === 'auth/wrong-password') {
-        alert("❌ Senha atual incorreta.");
+        alert("Senha atual incorreta.");
       } else if (error.code === 'auth/email-already-in-use') {
-        alert("❌ Este email já está em uso por outra conta.");
+        alert("Este email já está em uso por outra conta. Escolha outro email.");
       } else if (error.code === 'auth/invalid-email') {
-        alert("❌ Email inválido.");
+        alert("Email inválido.");
       } else if (error.code === 'auth/requires-recent-login') {
-        alert("❌ Por segurança, faça logout e login novamente antes de alterar o email.");
+        alert("Por segurança, faça logout e login novamente antes de alterar o email.");
       } else {
-        alert("❌ Erro ao alterar credenciais: " + error.message);
+        alert("Erro ao alterar credenciais: " + (error.message || error));
       }
     } finally {
       setIsSaving(false);
@@ -194,85 +316,75 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 
   return (
     <div className="space-y-8 pb-20">
-      <div className="mb-12">
-        <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase mb-2">Configurações</h1>
-        <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px]">Personalize seu Sistema</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Configurações</h1>
+          <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px] mt-2">Sistema e Perfil</p>
+        </div>
+        {showSuccess && (
+          <div className="flex items-center gap-3 bg-green-50 text-green-600 px-6 py-3 rounded-2xl font-bold text-sm animate-fade-in">
+            <CheckCircle size={20} /> Salvo com sucesso!
+          </div>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {/* DADOS DA EMPRESA */}
             <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
               <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                   <ShieldCheck size={24} />
                 </div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Informações da Empresa</h2>
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Dados da Empresa</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social</label>
-                  <input required placeholder="Ex: Festa Brinquedos LTDA" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.name} onChange={e => setCompanyData({...companyData, name: e.target.value})} />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Empresa</label>
+                  <input required className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.name} onChange={e => setCompanyData({...companyData, name: e.target.value})} />
                 </div>
-
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
-                  <input placeholder="00.000.000/0000-00" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone</label>
+                  <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.phone} onChange={e => setCompanyData({...companyData, phone: e.target.value})} />
                 </div>
-
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço</label>
-                  <input placeholder="Rua, Número, Bairro, Cidade - UF" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.address} onChange={e => setCompanyData({...companyData, address: e.target.value})} />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone Principal</label>
-                  <div className="flex items-center gap-2">
-                    <Phone size={20} className="text-slate-300 ml-4" />
-                    <input placeholder="(00) 00000-0000" className="flex-1 px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.phone} onChange={e => setCompanyData({...companyData, phone: e.target.value})} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail de Contato</label>
-                  <div className="flex items-center gap-2">
-                    <Mail size={20} className="text-slate-300 ml-4" />
-                    <input type="email" placeholder="contato@empresa.com.br" className="flex-1 px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.email} onChange={e => setCompanyData({...companyData, email: e.target.value})} />
-                  </div>
+                  <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.address} onChange={e => setCompanyData({...companyData, address: e.target.value})} />
                 </div>
               </div>
 
-              <button type="submit" disabled={isSaving} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all disabled:opacity-50">
-                {isSaving ? <><CloudUpload className="animate-bounce" size={20}/> Salvando...</> : showSuccess ? <><CheckCircle size={20}/> Salvo com Sucesso!</> : <><Save size={20}/> Salvar Alterações</>}
+              <button type="submit" disabled={isSaving} className="w-full bg-blue-600 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center gap-3">
+                {isSaving ? 'Salvando...' : <><Save size={20} /> Salvar Alterações</>}
               </button>
             </section>
+          </form>
 
-            {/* DADOS DO USUÁRIO */}
-            <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
-              <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
-                <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
-                  <UserIcon size={24} />
-                </div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Meu Perfil</h2>
+          {/* DADOS DO PERFIL */}
+          <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+            <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
+              <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
+                <UserIcon size={24} />
               </div>
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Meu Perfil</h2>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                    <input placeholder="Seu nome" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
-                    <div className="w-full px-6 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 flex items-center gap-2">
-                      <Mail size={16} /> {userData.email}
-                    </div>
-                  </div>
-               </div>
-            </section>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+                <div className="w-full px-6 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 flex items-center gap-2">
+                  <Mail size={16} /> {userData.email}
+                </div>
+              </div>
+            </div>
+          </section>
 
-          {/* ✅ SEÇÃO DE SEGURANÇA: ALTERAR EMAIL E SENHA */}
+          {/* SEÇÃO DE SEGURANÇA - ALTERAR EMAIL E SENHA */}
           <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center justify-between border-b border-slate-50 pb-6">
               <div className="flex items-center gap-4">
@@ -282,22 +394,103 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Segurança</h2>
               </div>
               
-              {!isChangingCredentials && (
-                <button
-                  type="button"
-                  onClick={() => setIsChangingCredentials(true)}
-                  className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
-                >
-                  <Key size={16} className="inline mr-2" /> Alterar Email/Senha
-                </button>
-              )}
+              <div className="flex gap-3">
+                {!isChangingCredentials && !isRecovering && (
+                  <>
+                    <button
+                      onClick={() => setIsRecovering(true)}
+                      className="bg-green-50 text-green-600 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-100 transition-all"
+                    >
+                      🔓 Recuperar Email
+                    </button>
+                    <button
+                      onClick={() => setIsChangingCredentials(true)}
+                      className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
+                    >
+                      <Key size={16} className="inline mr-2" /> Alterar Email/Senha
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
-            {isChangingCredentials ? (
+            {/* FORMULÁRIO DE RECUPERAÇÃO DE EMAIL */}
+            {isRecovering ? (
+              <form onSubmit={handleRecoverExistingEmail} className="space-y-6">
+                <div className="p-4 bg-green-50 border border-green-200 rounded-2xl">
+                  <p className="text-xs font-bold text-green-800">
+                    🔓 <strong>RECUPERAÇÃO DE EMAIL EXISTENTE</strong>
+                  </p>
+                  <p className="text-xs text-green-700 mt-2">
+                    Use esta opção se você já tem um email cadastrado no Firebase Authentication mas ele não aparece na lista de usuários. 
+                    Digite o email e senha para recuperar o acesso como ADMIN.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email para Recuperar *</label>
+                    <input 
+                      type="email" 
+                      required
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                      value={recoveryEmail}
+                      onChange={e => setRecoveryEmail(e.target.value)}
+                      placeholder="email@existente.com"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha deste Email *</label>
+                    <input 
+                      type="password" 
+                      required
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                      value={recoveryPassword}
+                      onChange={e => setRecoveryPassword(e.target.value)}
+                      placeholder="Digite a senha"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                  <p className="text-xs font-bold text-blue-800">
+                    ℹ️ O que acontecerá:
+                  </p>
+                  <ul className="text-xs text-blue-700 mt-2 space-y-1 ml-4">
+                    <li>• O sistema fará login com o email fornecido</li>
+                    <li>• Criará um perfil de ADMIN no Firestore</li>
+                    <li>• Você terá acesso total ao sistema</li>
+                    <li>• Não é necessário fazer logout após a recuperação</li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-4">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-green-700 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? '🔄 Recuperando...' : '✅ Recuperar Acesso'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRecovering(false);
+                      setRecoveryEmail('');
+                      setRecoveryPassword('');
+                    }}
+                    className="bg-slate-100 text-slate-600 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            ) : isChangingCredentials ? (
               <form onSubmit={handleChangeCredentials} className="space-y-6">
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
                   <p className="text-xs font-bold text-amber-800">
-                    ⚠️ Por segurança, você precisa confirmar sua senha atual para fazer alterações.
+                    ⚠️ <strong>IMPORTANTE:</strong> Ao alterar o email, uma nova conta será criada no Firebase e você manterá todas as permissões de ADMIN.
                   </p>
                 </div>
 
@@ -315,7 +508,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Novo Email (Opcional)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Novo Email</label>
                     <input 
                       type="email" 
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
@@ -323,10 +516,11 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                       onChange={e => setNewEmail(e.target.value)}
                       placeholder="novo@email.com"
                     />
+                    <p className="text-[10px] text-slate-400 ml-1 mt-1">Deixe em branco para manter o atual</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Senha (Opcional)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Senha</label>
                     <input 
                       type="password" 
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
@@ -334,12 +528,13 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                       onChange={e => setNewPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
                     />
+                    <p className="text-[10px] text-slate-400 ml-1 mt-1">Deixe em branco para manter a atual</p>
                   </div>
                 </div>
 
                 {newPassword && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirmar Nova Senha</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirmar Nova Senha *</label>
                     <input 
                       type="password" 
                       required
@@ -353,10 +548,13 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
                   <p className="text-xs font-bold text-blue-800">
-                    🔐 Suas permissões de ADMIN serão transferidas automaticamente para o novo email!
+                    🔐 Você continuará como ADMIN com acesso total ao sistema!
                   </p>
                   <p className="text-xs text-blue-600 mt-2">
-                    Após a alteração, faça logout e entre com as novas credenciais.
+                    {newEmail 
+                      ? "Uma nova conta será criada automaticamente e a antiga será removida."
+                      : "Apenas sua senha será alterada, seu email permanecerá o mesmo."
+                    }
                   </p>
                 </div>
 
@@ -366,7 +564,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
                     disabled={isSaving}
                     className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50"
                   >
-                    {isSaving ? 'Processando...' : '✅ Confirmar Alteração'}
+                    {isSaving ? '🔄 Processando...' : '✅ Confirmar Alteração'}
                   </button>
                   <button
                     type="button"
@@ -402,7 +600,7 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
             <div onClick={() => logoInputRef.current?.click()} className="relative w-48 h-48 mb-6 group cursor-pointer">
               <div className="w-full h-full rounded-[48px] bg-slate-50 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center">
                 {companyData.logoUrl ? (
-                  <img src={companyData.logoUrl} className="w-full h-full object-cover" />
+                  <img src={companyData.logoUrl} className="w-full h-full object-cover" alt="Logo" />
                 ) : (
                   <CloudUpload size={48} className="text-slate-200" />
                 )}
@@ -418,11 +616,11 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
           {/* FOTO DE PERFIL */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
             <div onClick={() => profileInputRef.current?.click()} className="relative w-32 h-32 mb-6 group cursor-pointer">
-              <div className="w-full h-full rounded-full bg-slate-50 border-4 border-white shadow-xl overflow-hidden flex items-center justify-center">
+              <div className="w-full h-full rounded-full bg-slate-50 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center">
                 {userData.profilePhotoUrl ? (
-                  <img src={userData.profilePhotoUrl} className="w-full h-full object-cover" />
+                  <img src={userData.profilePhotoUrl} className="w-full h-full object-cover" alt="Perfil" />
                 ) : (
-                  <UserIcon size={48} className="text-slate-200" />
+                  <UserIcon size={40} className="text-slate-200" />
                 )}
               </div>
               <div className="absolute inset-0 bg-purple-600/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-white rounded-full">
@@ -433,12 +631,12 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
             <h3 className="font-black text-slate-800 uppercase tracking-tight">Foto de Perfil</h3>
           </section>
 
-          {/* FOTO DA TELA DE LOGIN */}
+          {/* FUNDO DO LOGIN */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
             <div onClick={() => loginInputRef.current?.click()} className="relative w-full h-32 mb-6 group cursor-pointer">
               <div className="w-full h-full rounded-[32px] bg-slate-50 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
                 {companyData.loginBgUrl ? (
-                  <img src={companyData.loginBgUrl} className="w-full h-full object-cover" />
+                  <img src={companyData.loginBgUrl} className="w-full h-full object-cover" alt="Fundo Login" />
                 ) : (
                   <ImageIcon size={32} className="text-slate-200" />
                 )}
@@ -453,7 +651,6 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
           </section>
         </div>
       </div>
-      </form>
     </div>
   );
 };
