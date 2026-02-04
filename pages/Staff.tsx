@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { UsersRound, Plus, ShieldCheck, Shield, Trash2, X, Lock, Eye, EyeOff, Check, Loader2, AlertCircle, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
@@ -53,80 +53,161 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
     setIsModalOpen(true);
   };
 
-  // ✅ FUNÇÃO CORRIGIDA: Remove do Firestore (botão laranja)
-  const handleDelete = async (userId: string, userEmail: string) => {
-    if (!window.confirm(`⚠️ Remover ${userEmail} da lista?\n\nO email continuará podendo fazer login, mas sem permissões de acesso.`)) {
+  // ✅ EXCLUSÃO NORMAL - PERMITE DELETAR QUALQUER USUÁRIO (incluindo ADMIN)
+  const handleDelete = async (userId: string, userEmail: string, userRole: string) => {
+    // ✅ Aviso especial se for ADMIN
+    let confirmMessage = '';
+    
+    if (userRole === 'ADMIN') {
+      confirmMessage = 
+        `⚠️ ATENÇÃO: VOCÊ ESTÁ DELETANDO UM ADMINISTRADOR!\n\n` +
+        `Email: ${userEmail}\n\n` +
+        `⚠️ RISCOS:\n` +
+        `• Você pode perder acesso ao sistema\n` +
+        `• Outros admins podem perder acesso\n` +
+        `• Configurações podem ser afetadas\n\n` +
+        `TEM CERTEZA ABSOLUTA?`;
+    } else {
+      confirmMessage = `⚠️ Remover colaborador?\n\n${userEmail}`;
+    }
+
+    if (!window.confirm(confirmMessage)) {
       return;
+    }
+
+    // ✅ Confirmação EXTRA para ADMIN
+    if (userRole === 'ADMIN') {
+      const doubleCheck = window.confirm(
+        `🚨 ÚLTIMA CONFIRMAÇÃO!\n\n` +
+        `Você TEM CERTEZA que quer deletar o ADMIN:\n` +
+        `${userEmail}\n\n` +
+        `Digite OK para confirmar.`
+      );
+      
+      if (!doubleCheck) {
+        return;
+      }
     }
 
     setLoading(true);
     try {
-      // 1. Deleta do Firestore
+      console.log('🗑️ Deletando usuário:', userId, userEmail, userRole);
+      
+      // Deleta do Firestore
       await deleteDoc(doc(db, "users", userId));
       
-      // 2. Atualiza o estado local imediatamente
+      // Remove do estado local
       setStaff(prev => prev.filter(u => u.id !== userId));
       
-      alert("✅ Colaborador removido da lista!");
+      alert(`✅ ${userEmail} foi removido com sucesso!`);
     } catch (e: any) {
-      console.error("Erro ao remover:", e);
-      alert("❌ Erro ao remover colaborador: " + e.message);
+      console.error("❌ Erro ao remover:", e);
+      alert("❌ Erro ao remover: " + e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ FUNÇÃO NOVA: Deleta completamente (botão vermelho)
-  const handleDeleteCompletely = async (userId: string, userEmail: string) => {
-    if (!window.confirm(
-      `🚨 ATENÇÃO: EXCLUSÃO PERMANENTE\n\n` +
-      `Isso vai deletar PERMANENTEMENTE:\n` +
-      `✓ ${userEmail}\n` +
-      `✓ Acesso ao sistema\n` +
-      `✓ Dados do Firestore\n\n` +
-      `VOCÊ NÃO PODERÁ DESFAZER!\n\n` +
-      `Para deletar do Firebase Auth também, você precisa:\n` +
-      `1. Acessar Firebase Console\n` +
-      `2. Authentication → Users\n` +
-      `3. Deletar o email manualmente\n\n` +
-      `Continuar?`
-    )) {
+  // 🔥 EXCLUSÃO FORÇADA - MÚLTIPLAS TENTATIVAS
+  const handleForceDelete = async (userId: string, userEmail: string, userRole: string) => {
+    let confirmMessage = `🚨 EXCLUSÃO FORÇADA\n\n`;
+    
+    if (userRole === 'ADMIN') {
+      confirmMessage += 
+        `⚠️⚠️⚠️ ESTE É UM ADMINISTRADOR! ⚠️⚠️⚠️\n\n` +
+        `Email: ${userEmail}\n\n` +
+        `DELETAR UM ADMIN PODE CAUSAR:\n` +
+        `• Perda de acesso ao sistema\n` +
+        `• Bloqueio de funcionalidades\n` +
+        `• Problemas graves de configuração\n\n`;
+    } else {
+      confirmMessage += `Email: ${userEmail}\n\n`;
+    }
+    
+    confirmMessage += 
+      `Esta ação irá:\n` +
+      `• Tentar deletar múltiplas vezes\n` +
+      `• Forçar remoção do Firestore\n` +
+      `• Recarregar a página\n\n` +
+      `CONTINUAR?`;
+
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
     setLoading(true);
+    
     try {
-      // 1. Deleta do Firestore
-      console.log("Deletando do Firestore:", userId);
+      console.log('🔥 EXCLUSÃO FORÇADA');
+      console.log('Email:', userEmail);
+      console.log('UID:', userId);
+      console.log('Role:', userRole);
+
+      // TENTATIVA 1
+      console.log('🗑️ Tentativa 1...');
       await deleteDoc(doc(db, "users", userId));
-      
-      // 2. Atualiza o estado local
+      console.log('✅ Tentativa 1 OK');
+
       setStaff(prev => prev.filter(u => u.id !== userId));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // VERIFICAÇÃO 1
+      console.log('🔍 Verificação 1...');
+      const check1 = await getDoc(doc(db, "users", userId));
+      
+      if (check1.exists()) {
+        console.log('⚠️ Ainda existe! Tentativa 2...');
+        await deleteDoc(doc(db, "users", userId));
+        console.log('✅ Tentativa 2 OK');
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const check2 = await getDoc(doc(db, "users", userId));
+        
+        if (check2.exists()) {
+          console.log('⚠️ Ainda existe! Tentativa 3...');
+          await deleteDoc(doc(db, "users", userId));
+          console.log('✅ Tentativa 3 OK');
+          
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          const checkFinal = await getDoc(doc(db, "users", userId));
+          
+          if (checkFinal.exists()) {
+            console.error('❌ FALHOU após 3 tentativas');
+            alert(
+              `❌ FALHA NA EXCLUSÃO\n\n` +
+              `O usuário não foi deletado após 3 tentativas.\n\n` +
+              `Tente deletar manualmente:\n` +
+              `Firebase Console → Firestore → users → ${userId}`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      console.log('✅✅✅ SUCESSO TOTAL!');
       
       alert(
-        `✅ Usuário removido do Firestore!\n\n` +
-        `⚠️ IMPORTANTE:\n` +
-        `O email ${userEmail} ainda existe no Firebase Auth.\n\n` +
-        `Para deletar completamente:\n` +
-        `1. Acesse: https://console.firebase.google.com\n` +
-        `2. Vá em Authentication → Users\n` +
-        `3. Busque: ${userEmail}\n` +
-        `4. Delete manualmente`
+        `✅ EXCLUSÃO FORÇADA BEM-SUCEDIDA!\n\n` +
+        `${userEmail} foi removido completamente.\n\n` +
+        `A página será recarregada.`
       );
+
+      setTimeout(() => window.location.reload(), 1000);
+
     } catch (e: any) {
-      console.error("Erro ao deletar:", e);
-      alert("❌ Erro ao deletar: " + e.message);
+      console.error('❌ ERRO:', e);
+      alert(`❌ Erro: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // FUNÇÃO PARA RESTAURAR UM E-MAIL QUE JÁ EXISTE NO AUTH MAS NÃO NO FIRESTORE
   const handleRestoreConflict = async () => {
     setLoading(true);
     setError(null);
     try {
-      alert("Para vincular um e-mail já existente, o sistema tentará criar o perfil no banco de dados. Certifique-se que o nome e permissões estão preenchidos.");
+      alert("Criando perfil para email já existente no Firebase Auth.");
       
       const tempId = `old_user_${Date.now()}`;
       const newUser: User = {
@@ -141,9 +222,9 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
       await setDoc(doc(db, "users", newUser.id), newUser);
       setStaff(prev => [...prev, newUser]);
       setIsModalOpen(false);
-      alert("✅ Perfil restaurado! Se o colaborador esqueceu a senha, ele deve usar a opção 'Esqueci minha senha' no login.");
+      alert("✅ Perfil criado!");
     } catch (e: any) {
-      setError("Não foi possível restaurar: " + e.message);
+      setError("Erro: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -157,7 +238,7 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
     try {
       if (editingUser) {
-        // Editando usuário existente
+        // Editando usuário
         const updatedUser = { ...editingUser, ...formData } as User;
         await setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true });
         setStaff(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
@@ -172,9 +253,11 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
         }
 
         try {
+          // ✅ Cria conta no Firebase Auth
           const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
           const newUid = userCredential.user.uid;
 
+          // ✅ Cria documento no Firestore
           const newUser: User = {
             id: newUid,
             name: formData.name || '',
@@ -187,11 +270,11 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
           await setDoc(doc(db, "users", newUid), newUser);
           setStaff(prev => [...prev, newUser]);
           setIsModalOpen(false);
-          alert("✅ Colaborador criado com sucesso!");
+          alert("✅ Colaborador criado! Ele já pode fazer login.");
         } catch (authError: any) {
           if (authError.code === 'auth/email-already-in-use') {
             setEmailConflict(true);
-            setError("Este e-mail já está no sistema de login, mas não está na sua lista.");
+            setError("Este e-mail já está cadastrado no sistema.");
           } else {
             throw authError;
           }
@@ -216,16 +299,30 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
   return (
     <div className="space-y-8 pb-20">
+      {/* ✅ AVISO IMPORTANTE */}
+      <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={24} className="text-red-600 flex-shrink-0 mt-1" />
+          <div>
+            <h3 className="font-black text-red-800 text-sm uppercase mb-2">⚠️ ATENÇÃO: Você pode deletar QUALQUER usuário!</h3>
+            <p className="text-red-700 text-xs leading-relaxed">
+              <strong>Incluindo ADMINISTRADORES!</strong> Tenha muito cuidado ao deletar usuários com role ADMIN. 
+              Deletar um admin pode bloquear acesso ao sistema e causar problemas sérios.
+              <br/><br/>
+              <strong>Botões:</strong><br/>
+              🟠 <strong>Laranja</strong> = Remover (uma tentativa)<br/>
+              🔴 <strong>Vermelho</strong> = Forçar exclusão (3 tentativas)
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Colaboradores</h1>
           <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px] mt-2">Gestão de Equipe e Permissões</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()} 
-          disabled={loading}
-          className="bg-slate-900 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-600 transition-all shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50"
-        >
+        <button onClick={() => handleOpenModal()} className="bg-slate-900 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-600 transition-all shadow-2xl flex items-center justify-center gap-3">
           <Plus size={20} /> Novo Colaborador
         </button>
       </div>
@@ -233,6 +330,13 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {staff.map((member) => (
           <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative">
+            {/* ✅ Badge de ADMIN */}
+            {member.role === 'ADMIN' && (
+              <div className="absolute top-4 left-4 bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1">
+                <ShieldCheck size={12} /> Admin
+              </div>
+            )}
+
             <div className="flex items-start justify-between mb-6">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors overflow-hidden">
                 {member.profilePhotoUrl ? (
@@ -244,33 +348,35 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
               <div className="flex gap-2">
                 <button 
                   onClick={() => handleOpenModal(member)} 
-                  disabled={loading}
-                  className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all disabled:opacity-50"
-                  title="Editar permissões"
+                  className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all" 
+                  title="Editar"
                 >
                   <Shield size={18} />
                 </button>
                 <button 
-                  onClick={() => handleDelete(member.id, member.email)} 
-                  disabled={loading}
-                  className="p-3 bg-orange-50 text-orange-400 rounded-xl hover:bg-orange-500 hover:text-white transition-all disabled:opacity-50"
-                  title="Remover da lista (mantém no Auth)"
+                  onClick={() => handleDelete(member.id, member.email, member.role)} 
+                  className="p-3 bg-orange-50 text-orange-400 rounded-xl hover:bg-orange-500 hover:text-white transition-all" 
+                  title="Remover (1 tentativa)"
                 >
                   <Trash2 size={18} />
                 </button>
                 <button 
-                  onClick={() => handleDeleteCompletely(member.id, member.email)} 
-                  disabled={loading}
-                  className="p-3 bg-red-50 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
-                  title="DELETAR PERMANENTEMENTE"
+                  onClick={() => handleForceDelete(member.id, member.email, member.role)} 
+                  className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all" 
+                  title="🔥 Forçar Exclusão (3 tentativas)"
                 >
-                  <X size={18} />
+                  <Zap size={18} />
                 </button>
               </div>
             </div>
             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-1">{member.name}</h3>
             <p className="text-slate-400 font-bold text-xs mb-6 lowercase">{member.email}</p>
             <div className="flex flex-wrap gap-2">
+              {member.role === 'ADMIN' && (
+                <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                  Acesso Total
+                </span>
+              )}
               {member.allowedPages?.map(pageId => (
                 <span key={pageId} className="px-3 py-1 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-black uppercase tracking-wider">
                   {AVAILABLE_PAGES.find(p => p.id === pageId)?.name}
@@ -298,10 +404,9 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
                   <button 
                     type="button"
                     onClick={handleRestoreConflict}
-                    disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-amber-600 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-all disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 bg-amber-600 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-700 transition-all"
                   >
-                    <RefreshCw size={14} /> Reativar Acesso para este E-mail
+                    <RefreshCw size={14} /> Criar Perfil
                   </button>
                 )}
               </div>
@@ -309,14 +414,41 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
 
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input required placeholder="Nome Completo" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                <input required type="email" placeholder="E-mail de Login" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
+                <input 
+                  required 
+                  placeholder="Nome Completo" 
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                  value={formData.name} 
+                  onChange={e => setFormData({...formData, name: e.target.value})} 
+                />
+                <input 
+                  required 
+                  type="email" 
+                  placeholder="E-mail de Login" 
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                  value={formData.email} 
+                  onChange={e => setFormData({...formData, email: e.target.value})} 
+                  disabled={!!editingUser} 
+                />
               </div>
 
               {!editingUser && (
                 <div className="relative">
-                  <input required={!emailConflict} type={showPassword ? "text" : "password"} placeholder="Senha" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-4 text-slate-300">{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
+                  <input 
+                    required 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Senha (mínimo 6 caracteres)" 
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
+                    value={formData.password} 
+                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-6 top-4 text-slate-300"
+                  >
+                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                  </button>
                 </div>
               )}
 
@@ -329,7 +461,9 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
                       type="button"
                       onClick={() => togglePage(page.id)}
                       className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
-                        formData.allowedPages?.includes(page.id) ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'
+                        formData.allowedPages?.includes(page.id) 
+                          ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                          : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -343,8 +477,12 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all disabled:opacity-50">
-              {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? '💾 Atualizar Colaborador' : '✨ Criar Acesso'}
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={20}/> : editingUser ? '💾 Atualizar' : '✨ Criar Acesso'}
             </button>
           </form>
         </div>
