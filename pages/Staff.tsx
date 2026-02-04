@@ -62,10 +62,11 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
     setLoading(true);
     try {
       // 1. Deleta do Firestore
+      console.log("🗑️ Deletando usuário:", userId);
       await deleteDoc(doc(db, "users", userId));
       
-      // 2. Atualiza o estado local imediatamente
-      setStaff(prev => prev.filter(u => u.id !== userId));
+      // 2. NÃO atualiza o estado local - deixa o onSnapshot do App fazer isso
+      // O listener do App vai atualizar automaticamente
       
       alert("✅ Colaborador removido da lista!");
     } catch (e: any) {
@@ -97,11 +98,10 @@ const Staff: React.FC<Props> = ({ staff, setStaff }) => {
     setLoading(true);
     try {
       // 1. Deleta do Firestore
-      console.log("Deletando do Firestore:", userId);
+      console.log("🗑️ Deletando PERMANENTEMENTE usuário:", userId);
       await deleteDoc(doc(db, "users", userId));
       
-      // 2. Atualiza o estado local
-      setStaff(prev => prev.filter(u => u.id !== userId));
+      // 2. NÃO atualiza o estado local - deixa o onSnapshot do App fazer isso
       
       alert(
         `✅ Usuário removido do Firestore!\n\n` +
