@@ -244,17 +244,17 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
 
   return (
     <div className="space-y-6">
-      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-12">
-        <div className="border-b-4 border-slate-900 pb-8 mb-8 flex justify-between items-center">
+      <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-8">
+        <div className="border-b-4 border-slate-900 pb-6 mb-6 flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
+            <h1 className="text-3xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
             <p className="text-base font-bold mt-2 uppercase tracking-widest opacity-60">
               {viewTab === 'Mês' 
                 ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                 : `Ano ${currentDate.getFullYear()}`}
             </p>
           </div>
-          <div className="w-24 h-24 rounded-[28px] overflow-hidden border-2 border-slate-900">
+          <div className="w-20 h-20 rounded-[28px] overflow-hidden border-2 border-slate-900">
             {user?.profilePhotoUrl ? (
               <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" />
             ) : (
@@ -263,63 +263,63 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-6 mb-10">
-          <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-sm font-black uppercase opacity-60 mb-2">Receitas</p>
-            <p className="text-3xl font-black text-emerald-600">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</p>
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="border-2 border-slate-900 p-4 rounded-2xl">
+            <p className="text-sm font-black uppercase opacity-60 mb-1">Receitas</p>
+            <p className="text-2xl font-black text-emerald-600">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</p>
           </div>
-          <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-sm font-black uppercase opacity-60 mb-2">Despesas</p>
-            <p className="text-3xl font-black text-rose-500">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</p>
+          <div className="border-2 border-slate-900 p-4 rounded-2xl">
+            <p className="text-sm font-black uppercase opacity-60 mb-1">Despesas</p>
+            <p className="text-2xl font-black text-rose-500">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</p>
           </div>
-          <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-sm font-black uppercase opacity-60 mb-2">Lucro</p>
-            <p className="text-3xl font-black text-blue-600">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</p>
+          <div className="border-2 border-slate-900 p-4 rounded-2xl">
+            <p className="text-sm font-black uppercase opacity-60 mb-1">Lucro</p>
+            <p className="text-2xl font-black text-blue-600">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</p>
           </div>
-          <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-sm font-black uppercase opacity-60 mb-2">A Receber</p>
-            <p className="text-3xl font-black text-amber-500">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</p>
+          <div className="border-2 border-slate-900 p-4 rounded-2xl">
+            <p className="text-sm font-black uppercase opacity-60 mb-1">A Receber</p>
+            <p className="text-2xl font-black text-amber-500">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</p>
           </div>
         </div>
 
-        <table className="w-full text-sm text-left border-collapse">
+        <table className="w-full text-base text-left border-collapse">
           <thead>
             <tr className="border-b-2 border-slate-900 uppercase font-black">
-              <th className="py-3 px-2">Descrição</th>
-              <th className="py-3 px-2">Data</th>
-              <th className="py-3 px-2">Tipo</th>
-              <th className="py-3 px-2 text-right">Valor</th>
+              <th className="py-2 px-2">Descrição</th>
+              <th className="py-2 px-2">Data</th>
+              <th className="py-2 px-2">Tipo</th>
+              <th className="py-2 px-2 text-right">Valor</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {stats.filteredRentals.map(r => (
               <tr key={r.id}>
-                <td className="py-3 px-2 font-black">Entrada: {r.customerName}</td>
-                <td className="py-3 px-2 opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-xs">Receita</td>
-                <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
+                <td className="py-2 px-2 font-black">Entrada: {r.customerName}</td>
+                <td className="py-2 px-2 opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td className="py-2 px-2 uppercase text-emerald-600 font-black">Receita</td>
+                <td className="py-2 px-2 text-right font-black text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
             {stats.filteredTrans.filter(t => t.type === 'INCOME').map(t => (
               <tr key={t.id}>
-                <td className="py-3 px-2 font-black">{t.description}</td>
-                <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-xs">Receita</td>
-                <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+                <td className="py-2 px-2 font-black">{t.description}</td>
+                <td className="py-2 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="py-2 px-2 uppercase text-emerald-600 font-black">Receita</td>
+                <td className="py-2 px-2 text-right font-black text-emerald-600">+ R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
             {stats.filteredTrans.filter(t => t.type === 'EXPENSE').map(t => (
               <tr key={t.id}>
-                <td className="py-3 px-2 font-black">{t.description}</td>
-                <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-rose-500 font-black text-xs">Despesa</td>
-                <td className="py-3 px-2 text-right font-black text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
+                <td className="py-2 px-2 font-black">{t.description}</td>
+                <td className="py-2 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                <td className="py-2 px-2 uppercase text-rose-500 font-black">Despesa</td>
+                <td className="py-2 px-2 text-right font-black text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="mt-10 border-t pt-4 text-xs font-black uppercase opacity-40 text-center">
+        <div className="mt-6 border-t pt-3 text-xs font-black uppercase opacity-40 text-center">
           Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')}
         </div>
       </div>
