@@ -248,148 +248,150 @@ const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser 
 - O email antigo (${oldEmail}) não terá mais acesso de admin
 
 🗑️ NOTA: O email antigo ainda existe no Firebase Authentication.
-Para remover completamente, acesse o Firebase Console:
-https://console.firebase.google.com
-→ Authentication → Users → Delete ${oldEmail}`;
+Você pode removê-lo manualmente no console do Firebase se desejar.`;
 
-        console.log("🎉 Transferência concluída com sucesso!");
         alert(successMessage);
-        
-        // Limpa os campos
-        setCurrentPassword('');
-        setNewEmail('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setIsChangingCredentials(false);
-        
-        // Faz logout automático após 3 segundos
-        console.log("⏳ Logout em 3 segundos...");
-        setTimeout(() => {
-          console.log("🚪 Fazendo logout...");
-          signOut(auth).then(() => {
-            console.log("✅ Logout realizado");
-          }).catch((error) => {
-            console.error("❌ Erro no logout:", error);
-          });
+
+        // PASSO 5: Desloga o usuário atual após 3 segundos
+        console.log("⏳ Aguardando 3 segundos antes de deslogar...");
+        setTimeout(async () => {
+          console.log("👋 Deslogando usuário...");
+          await signOut(auth);
+          console.log("✅ Transferência completa!");
         }, 3000);
       }
-      
+
     } catch (error: any) {
-      console.error("❌ Erro geral ao alterar credenciais:", error);
-      
-      if (error.code === 'auth/requires-recent-login') {
-        alert("❌ Por segurança, faça logout e login novamente antes de alterar suas credenciais.");
-      } else {
-        alert("❌ Erro inesperado: " + error.message);
-      }
+      console.error("❌ Erro geral na transferência:", error);
+      alert("❌ Erro ao processar alteração: " + error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="space-y-8 pb-20">
-      <div className="mb-8">
-        <h1 className="text-4xl font-black text-slate-800 tracking-tight uppercase">Configurações</h1>
-        <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px] mt-2">Sistema e Preferências</p>
+    <div className="max-w-7xl mx-auto p-8 space-y-8">
+      <div className="flex items-center justify-between mb-10">
+        <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Configurações</h1>
+        {showSuccess && (
+          <div className="flex items-center gap-2 bg-green-50 border-2 border-green-500 text-green-700 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest">
+            <CheckCircle size={20} />
+            Salvo com sucesso!
+          </div>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <form onSubmit={handleSubmit}>
+      <div className="grid grid-cols-2 gap-8">
         <div className="space-y-8">
           {/* DADOS DA EMPRESA */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
-              <ShieldCheck size={24} className="text-blue-600" /> Dados da Empresa
+            <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 text-lg">
+              <FileText size={24} className="text-blue-600" />
+              Dados da Empresa
             </h2>
-            <input 
-              placeholder="Nome da Empresa" 
-              className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-              value={companyData.name} 
-              onChange={e => setCompanyData({...companyData, name: e.target.value})} 
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Nome da Empresa</label>
               <input 
-                placeholder="CNPJ" 
-                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                value={(companyData as any).cnpj || ''} 
-                onChange={e => setCompanyData({...companyData, cnpj: e.target.value} as any)}
-                maxLength={18}
-              />
-              <input 
-                placeholder="Telefone" 
-                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                value={companyData.phone} 
-                onChange={e => setCompanyData({...companyData, phone: e.target.value})} 
+                type="text" 
+                className="w-full px-6 py-4 bg-white rounded-2xl border-2 border-slate-200 font-bold focus:border-blue-400 outline-none" 
+                value={companyData.name}
+                onChange={e => setCompanyData({...companyData, name: e.target.value})}
               />
             </div>
-            <input 
-              placeholder="Email de Contato" 
-              className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-              value={companyData.email} 
-              onChange={e => setCompanyData({...companyData, email: e.target.value})} 
-            />
-            <input 
-              placeholder="Site (opcional)" 
-              className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-              value={companyData.website || ''} 
-              onChange={e => setCompanyData({...companyData, website: e.target.value})} 
-            />
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">CNPJ</label>
+              <input 
+                type="text" 
+                className="w-full px-6 py-4 bg-white rounded-2xl border-2 border-slate-200 font-bold focus:border-blue-400 outline-none" 
+                value={companyData.cnpj || ''}
+                onChange={e => setCompanyData({...companyData, cnpj: e.target.value})}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Telefone</label>
+              <input 
+                type="text" 
+                className="w-full px-6 py-4 bg-white rounded-2xl border-2 border-slate-200 font-bold focus:border-blue-400 outline-none" 
+                value={companyData.phone}
+                onChange={e => setCompanyData({...companyData, phone: e.target.value})}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Endereço</label>
+              <input 
+                type="text" 
+                className="w-full px-6 py-4 bg-white rounded-2xl border-2 border-slate-200 font-bold focus:border-blue-400 outline-none" 
+                value={companyData.address}
+                onChange={e => setCompanyData({...companyData, address: e.target.value})}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="w-full bg-blue-600 text-white px-8 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSaving ? '🔄 Salvando...' : <><Save size={20} /> Salvar Configurações</>}
+            </button>
           </section>
 
-          {/* PERFIL DO USUÁRIO */}
+          {/* MEUS DADOS */}
           <section className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
-              <UserIcon size={24} className="text-purple-600" /> Meu Perfil
+            <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 text-lg">
+              <UserIcon size={24} className="text-purple-600" />
+              Meus Dados
             </h2>
-            <input 
-              placeholder="Nome Completo" 
-              className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-              value={userData.name} 
-              onChange={e => setUserData({...userData, name: e.target.value})} 
-            />
-            
-            <div className="pt-6 border-t border-slate-100">
-              <button 
-                type="submit" 
-                disabled={isSaving} 
-                className="w-full bg-blue-600 text-white px-8 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
-              >
-                {isSaving ? 'Salvando...' : showSuccess ? <><CheckCircle size={20}/> Salvo!</> : <><Save size={20}/> Salvar Alterações</>}
-              </button>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Nome Completo</label>
+              <input 
+                type="text" 
+                className="w-full px-6 py-4 bg-white rounded-2xl border-2 border-slate-200 font-bold focus:border-purple-400 outline-none" 
+                value={userData.name}
+                onChange={e => setUserData({...userData, name: e.target.value})}
+              />
             </div>
           </section>
 
-          {/* SEGURANÇA - EMAIL E SENHA */}
-          <section className="bg-gradient-to-br from-red-50 to-orange-50 p-8 rounded-[48px] border-2 border-red-100 shadow-lg space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-red-800 uppercase tracking-tight flex items-center gap-3">
-                <Lock size={24} className="text-red-600" /> Segurança - Admin
-              </h2>
-              <ShieldCheck size={32} className="text-red-600" />
+          {/* ALTERAR EMAIL/SENHA DO ADMIN */}
+          <section className="bg-gradient-to-br from-red-50 to-orange-50 p-8 rounded-[48px] border-2 border-red-200 shadow-sm space-y-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 text-lg">
+                  <ShieldCheck size={24} className="text-red-600" />
+                  Transferir Administração
+                </h2>
+                <p className="text-xs font-bold text-red-700 mt-2">
+                  ⚠️ Use para transferir o controle total do sistema para outro email
+                </p>
+              </div>
+              {!isChangingCredentials && (
+                <button
+                  type="button"
+                  onClick={() => setIsChangingCredentials(true)}
+                  className="bg-red-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all flex items-center gap-2"
+                >
+                  <Key size={16} />
+                  Transferir Admin
+                </button>
+              )}
             </div>
-            
-            {!isChangingCredentials && (
-              <button
-                type="button"
-                onClick={() => {
-                  console.log("🔓 Abrindo formulário de transferência");
-                  setIsChangingCredentials(true);
-                }}
-                className="bg-red-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all w-full"
-              >
-                <Key size={16} className="inline mr-2" /> Transferir Admin para Novo Email
-              </button>
-            )}
 
             {isChangingCredentials ? (
-              <form onSubmit={handleChangeCredentials} className="space-y-6">
-                <div className="p-4 bg-red-100 border-2 border-red-200 rounded-2xl">
-                  <p className="text-xs font-bold text-red-900 mb-2">
-                    🚨 TRANSFERÊNCIA DE ADMINISTRADOR
+              <form onSubmit={handleChangeCredentials} className="space-y-6 mt-6">
+                <div className="p-6 bg-red-100 border-2 border-red-300 rounded-2xl space-y-2">
+                  <p className="text-xs font-black text-red-900 uppercase tracking-widest">
+                    🚨 ATENÇÃO - TRANSFERÊNCIA DE ADMINISTRAÇÃO
                   </p>
-                  <p className="text-xs text-red-700">
-                    Esta ação vai criar um NOVO ADMIN com o email fornecido e transferir TODAS as permissões.
+                  <p className="text-xs text-red-800">
+                    Esta ação irá transferir TODAS as permissões de administrador para um novo email.
+                    Você será deslogado e precisará fazer login com o novo email e senha.
                   </p>
                 </div>
 
@@ -473,7 +475,6 @@ https://console.firebase.google.com
                   <button
                     type="submit"
                     disabled={isSaving}
-                    onClick={() => console.log("🖱️ Botão Confirmar clicado")}
                     className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50"
                   >
                     {isSaving ? '🔄 Transferindo...' : '✅ Confirmar Transferência'}
