@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 
 interface UserContextType {
   user: User | null;
@@ -26,17 +26,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Monitora em tempo real. Se deletar no Firebase, docSnap.exists() será falso.
+        // Apenas observa o documento. Se o documento sumir, user vira null.
         const unsubUser = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
             setUser(docSnap.data() as User);
           } else {
-            // USUÁRIO DELETADO: Apenas define como null, sem recriar automaticamente.
             setUser(null);
           }
           setLoading(false);
         });
-
         return () => unsubUser();
       } else {
         setUser(null);
