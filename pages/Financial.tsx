@@ -247,14 +247,14 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
       <div id="financial-report-print" style={{ display: 'none' }} className="bg-white p-12">
         <div className="border-b-4 border-slate-900 pb-8 mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
-            <p className="text-sm font-bold mt-2 uppercase tracking-widest opacity-60">
+            <h1 className="text-4xl font-black uppercase tracking-tight">Relatório Financeiro</h1>
+            <p className="text-base font-bold mt-2 uppercase tracking-widest opacity-60">
               {viewTab === 'Mês' 
                 ? currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                 : `Ano ${currentDate.getFullYear()}`}
             </p>
           </div>
-          <div className="w-20 h-20 rounded-[28px] overflow-hidden border-2 border-slate-900">
+          <div className="w-24 h-24 rounded-[28px] overflow-hidden border-2 border-slate-900">
             {user?.profilePhotoUrl ? (
               <img src={user.profilePhotoUrl} className="w-full h-full object-cover" alt="Logo" />
             ) : (
@@ -265,24 +265,24 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
 
         <div className="grid grid-cols-4 gap-6 mb-10">
           <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Receitas</p>
-            <p className="text-2xl font-black text-emerald-600">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</p>
+            <p className="text-sm font-black uppercase opacity-60 mb-2">Receitas</p>
+            <p className="text-3xl font-black text-emerald-600">R$ {(stats.receitas || 0).toLocaleString('pt-BR')}</p>
           </div>
           <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Despesas</p>
-            <p className="text-2xl font-black text-rose-500">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</p>
+            <p className="text-sm font-black uppercase opacity-60 mb-2">Despesas</p>
+            <p className="text-3xl font-black text-rose-500">R$ {(stats.despesas || 0).toLocaleString('pt-BR')}</p>
           </div>
           <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-[10px] font-black uppercase opacity-60 mb-2">Lucro</p>
-            <p className="text-2xl font-black text-blue-600">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</p>
+            <p className="text-sm font-black uppercase opacity-60 mb-2">Lucro</p>
+            <p className="text-3xl font-black text-blue-600">R$ {(stats.lucro || 0).toLocaleString('pt-BR')}</p>
           </div>
           <div className="border-2 border-slate-900 p-6 rounded-2xl">
-            <p className="text-[10px] font-black uppercase opacity-60 mb-2">A Receber</p>
-            <p className="text-2xl font-black text-amber-500">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</p>
+            <p className="text-sm font-black uppercase opacity-60 mb-2">A Receber</p>
+            <p className="text-3xl font-black text-amber-500">R$ {(stats.aReceber || 0).toLocaleString('pt-BR')}</p>
           </div>
         </div>
 
-        <table className="w-full text-[11px] text-left border-collapse">
+        <table className="w-full text-sm text-left border-collapse">
           <thead>
             <tr className="border-b-2 border-slate-900 uppercase font-black">
               <th className="py-3 px-2">Descrição</th>
@@ -296,7 +296,7 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
               <tr key={r.id}>
                 <td className="py-3 px-2 font-black">Entrada: {r.customerName}</td>
                 <td className="py-3 px-2 opacity-60">{new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-[10px]">Receita</td>
+                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-xs">Receita</td>
                 <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(r.entryValue) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
@@ -304,7 +304,7 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
               <tr key={t.id}>
                 <td className="py-3 px-2 font-black">{t.description}</td>
                 <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-[10px]">Receita</td>
+                <td className="py-3 px-2 uppercase text-emerald-600 font-black text-xs">Receita</td>
                 <td className="py-3 px-2 text-right font-black text-emerald-600">+ R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
@@ -312,14 +312,14 @@ const Financial: React.FC<FinancialProps> = ({ rentals = [], transactions = [], 
               <tr key={t.id}>
                 <td className="py-3 px-2 font-black">{t.description}</td>
                 <td className="py-3 px-2 opacity-60">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
-                <td className="py-3 px-2 uppercase text-rose-500 font-black text-[10px]">Despesa</td>
+                <td className="py-3 px-2 uppercase text-rose-500 font-black text-xs">Despesa</td>
                 <td className="py-3 px-2 text-right font-black text-rose-500">- R$ {(Number(t.value) || 0).toLocaleString('pt-BR')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="mt-10 border-t pt-4 text-[9px] font-black uppercase opacity-40 text-center">
+        <div className="mt-10 border-t pt-4 text-xs font-black uppercase opacity-40 text-center">
           Gerado por {user?.name} em {new Date().toLocaleDateString('pt-BR')}
         </div>
       </div>
