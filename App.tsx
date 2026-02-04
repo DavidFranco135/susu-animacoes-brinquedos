@@ -48,117 +48,175 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// COMPONENTE DE LOGIN
-const Login: React.FC<{ company: CompanyType | null }> = ({ company }) => {
+const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login } = useUser();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
-      setError('E-mail ou senha inválidos.');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await new Promise<any>((resolve) => {
+        onSnapshot(doc(db, "users", userCredential.user.uid), (doc) => {
+          resolve(doc.data());
+        });
+      });
+
+      if (userDoc) {
+        login({
+          id: userCredential.user.uid,
+          email: userDoc.email,
+          name: userDoc.name,
+          role: userDoc.role,
+          allowedPages: userDoc.allowedPages
+        });
+      }
+    } catch (error) {
+      alert('Erro ao fazer login. Verifique suas credenciais.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center p-4 bg-slate-100" 
-      style={{ 
-        backgroundImage: company?.loginBgUrl ? `url(${company.loginBgUrl})` : 'none', 
-        backgroundSize: 'cover', 
-        backgroundPosition: 'center' 
-      }}
-    >
-      <div className="w-full max-w-md bg-white/90 backdrop-blur-md rounded-[40px] shadow-2xl p-10 border border-white/20 flex flex-col items-center">
-        <div className="text-center mb-10 w-full flex flex-col items-center">
-          <div className="w-24 h-24 bg-blue-600 rounded-[30px] flex items-center justify-center mb-6 shadow-xl overflow-hidden">
-             {company?.logoUrl ? <img src={company.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : <UserIcon size={40} className="text-white" />}
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-[48px] shadow-xl p-12 border border-slate-100">
+        <div className="text-center mb-10">
+          <div className="w-20 h-20 bg-blue-600 rounded-[32px] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200">
+            <UserIcon size={40} className="text-white" />
           </div>
-          <h2 className="text-xl font-black text-slate-800 tracking-widest uppercase">MAIS QUE BRINQUEDOS,
-          momentos felizes.</h2>
-          <p className="text-slate-500 mt-1 font-medium text-sm">{company?.name || 'SUSU Eventos'}</p>
+          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Acesso Restrito</h1>
+          <p className="text-slate-400 font-bold uppercase text-[10px] mt-2 tracking-widest">Painel Administrativo</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-6 w-full">
-          {error && <div className="p-4 bg-red-50 text-red-500 text-xs font-bold rounded-2xl text-center">{error}</div>}
-          <input type="email" required placeholder="E-mail" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input type="password" required placeholder="Senha" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold outline-none" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl hover:bg-blue-700 transition-all shadow-xl uppercase tracking-widest text-sm flex items-center justify-center">
-            {loading ? <Loader2 className="animate-spin" size={20}/> : 'Entrar'}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">E-mail</label>
+            <input
+              type="email"
+              required
+              className="w-full px-8 py-5 bg-slate-50 rounded-3xl border-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all outline-none"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Senha</label>
+            <input
+              type="password"
+              required
+              className="w-full px-8 py-5 bg-slate-50 rounded-3xl border-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all outline-none"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="animate-spin" /> : 'Entrar no Sistema'}
           </button>
         </form>
-        
-        <div className="w-full mt-6 pt-6 border-t border-slate-200">
-          <a 
-            href="#/catalogo" 
-            className="w-full flex items-center justify-center gap-3 bg-slate-50 text-slate-600 font-black py-4 rounded-2xl hover:bg-slate-100 transition-all text-xs uppercase tracking-widest"
-          >
-            <ExternalLink size={16} /> Ver Catálogo Público
-          </a>
-        </div>
       </div>
     </div>
   );
 };
 
-// COMPONENTE PRINCIPAL QUE USA O CONTEXT
 const AppContent: React.FC = () => {
-  const { user, loading: userLoading } = useUser();
+  const { user, logout, login } = useUser();
+  const [staff, setStaff] = useState<User[]>([]);
   const [toys, setToys] = useState<Toy[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [rentals, setRentals] = useState<Rental[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-  const [staff, setStaff] = useState<User[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [company, setCompany] = useState<CompanyType | null>(null);
 
   useEffect(() => {
-    // Carrega dados da empresa mesmo deslogado para o Login
-    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (docSnap) => {
-      if (docSnap.exists()) setCompany(docSnap.data() as CompanyType);
+    const qStaff = query(collection(db, "users"));
+    const unsubStaff = onSnapshot(qStaff, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
+      setStaff(data);
     });
 
-    if (!user) return;
+    const qToys = query(collection(db, "toys"));
+    const unsubToys = onSnapshot(qToys, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Toy[];
+      setToys(data);
+    });
 
-    const unsubToys = onSnapshot(query(collection(db, "toys"), orderBy("name")), (snap) => setToys(snap.docs.map(d => ({ ...d.data(), id: d.id } as Toy))));
-    const unsubCustomers = onSnapshot(query(collection(db, "customers"), orderBy("name")), (snap) => setCustomers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Customer))));
-    const unsubRentals = onSnapshot(query(collection(db, "rentals"), orderBy("date", "desc")), (snap) => setRentals(snap.docs.map(d => ({ ...d.data(), id: d.id } as Rental))));
-    const unsubFinancial = onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => setTransactions(snap.docs.map(d => ({ ...d.data(), id: d.id } as FinancialTransaction))));
-    const unsubStaff = onSnapshot(collection(db, "users"), (snap) => setStaff(snap.docs.map(d => ({ ...d.data(), id: d.id } as User))));
-    const unsubCategories = onSnapshot(doc(db, "settings", "categories"), (docSnap) => docSnap.exists() && setCategories(docSnap.data().list || []));
+    const qCats = query(collection(db, "categories"));
+    const unsubCats = onSnapshot(qCats, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data().name) as string[];
+      setCategories(data);
+    });
 
-    return () => { unsubToys(); unsubCustomers(); unsubRentals(); unsubFinancial(); unsubCompany(); unsubStaff(); unsubCategories(); };
-  }, [user]);
+    const qCustomers = query(collection(db, "customers"));
+    const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Customer[];
+      setCustomers(data);
+    });
+
+    const qRentals = query(collection(db, "rentals"), orderBy("date", "desc"));
+    const unsubRentals = onSnapshot(qRentals, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Rental[];
+      setRentals(data);
+    });
+
+    const qTransactions = query(collection(db, "transactions"), orderBy("date", "desc"));
+    const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as FinancialTransaction[];
+      setTransactions(data);
+    });
+
+    const unsubCompany = onSnapshot(doc(db, "settings", "company"), (doc) => {
+      if (doc.exists()) setCompany(doc.data() as CompanyType);
+    });
+
+    return () => {
+      unsubStaff();
+      unsubToys();
+      unsubCats();
+      unsubCustomers();
+      unsubRentals();
+      unsubTransactions();
+      unsubCompany();
+    };
+  }, []);
+
+  const handleUpdateCompany = async (newCompany: CompanyType) => {
+    await setDoc(doc(db, "settings", "company"), newCompany);
+  };
 
   const handleUpdateUser = async (updatedUser: User) => {
-    if (updatedUser.id) {
-      try {
-        await setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true });
-      } catch (e) {
-        console.error("Erro ao salvar perfil:", e);
-      }
-    }
+    await setDoc(doc(db, "users", updatedUser.id), updatedUser);
+    login(updatedUser);
   };
 
-  const handleUpdateCompany = async (updatedCompany: CompanyType) => {
-    await setDoc(doc(db, "settings", "company"), updatedCompany);
+  const handleLogout = async () => {
+    await signOut(auth);
+    logout();
   };
 
-  if (userLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
-
-  const hasAccess = (pageId: string) => user?.role === UserRole.ADMIN || user?.allowedPages?.includes(pageId);
+  const hasAccess = (pageId: string) => {
+    if (user.role === UserRole.ADMIN) return true;
+    return user.allowedPages?.includes(pageId);
+  };
 
   return (
     <Router>
       <Routes>
         <Route path="/login" element={!user.id ? <Login /> : <Navigate to="/" />} />
+        <Route path="/resumo-reserva/:id" element={<PublicRentalSummary rentals={rentals} company={company || {} as CompanyType} />} />
+        <Route path="/catalogo/:companyId" element={<PublicCatalog />} />
         
         <Route path="/" element={
           !user.id ? <Navigate to="/login" /> : (
@@ -173,7 +231,7 @@ const AppContent: React.FC = () => {
                 <Route path="/inventario" element={hasAccess('toys') ? <Inventory toys={toys} setToys={setToys} categories={categories} setCategories={setCategories} /> : <Navigate to="/reservas" />} />
                 <Route path="/recibos" element={hasAccess('documents') ? <DocumentsPage type="receipt" rentals={rentals} customers={customers} company={company || {} as CompanyType} /> : <Navigate to="/reservas" />} />
                 
-                {/* ROTA CORRIGIDA ABAIXO */}
+                {/* ROTA CORRIGIDA ABAIXO - REMOVIDA LÓGICA DE SETDOC REPETITIVA */}
                 <Route path="/colaboradores" element={
                   user.role === UserRole.ADMIN ? (
                     <Staff 
@@ -195,13 +253,10 @@ const AppContent: React.FC = () => {
   );
 };
 
-// COMPONENTE WRAPPER COM O PROVIDER
-const App: React.FC = () => {
-  return (
-    <UserProvider>
-      <AppContent />
-    </UserProvider>
-  );
-};
+const App: React.FC = () => (
+  <UserProvider>
+    <AppContent />
+  </UserProvider>
+);
 
 export default App;
