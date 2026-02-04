@@ -1,8 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon, History, RotateCcw } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Save, Upload, CloudUpload, CheckCircle, User as UserIcon, Lock, Key, Mail, ShieldCheck, Phone, Image as ImageIcon } from 'lucide-react';
 import { CompanySettings, User } from '../types';
-import { auth } from '../firebase';
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface Props {
   company: CompanySettings;
@@ -11,188 +9,15 @@ interface Props {
   onUpdateUser: (u: User) => void;
 }
 
-interface EmailHistoryEntry {
-  email: string;
-  date: string;
-  uid?: string;
-}
-
 const AppSettings: React.FC<Props> = ({ company, setCompany, user, onUpdateUser }) => {
   const [companyData, setCompanyData] = useState<CompanySettings>(company);
   const [userData, setUserData] = useState<User>(user);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // Estados para alteração de email/senha
-  const [isChangingCredentials, setIsChangingCredentials] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // ✅ NOVO: Estados para histórico de emails
-  const [emailHistory, setEmailHistory] = useState<EmailHistoryEntry[]>([]);
-  const [showEmailHistory, setShowEmailHistory] = useState(false);
-  
   const logoInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
-
-  // ✅ NOVO: Carregar histórico de emails ao montar o componente
-  useEffect(() => {
-    const loadEmailHistory = async () => {
-      try {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('../firebase');
-        
-        const historyDoc = await getDoc(doc(db, "settings", "adminHistory"));
-        if (historyDoc.exists()) {
-          const data = historyDoc.data();
-          setEmailHistory(data.emails || []);
-        }
-      } catch (error) {
-        console.log("Erro ao carregar histórico:", error);
-      }
-    };
-    
-    loadEmailHistory();
-  }, []);
-
-  // ✅ NOVO: Função para salvar histórico de email
-  const saveEmailToHistory = async (email: string, uid: string) => {
-    try {
-      const { doc, setDoc, getDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      
-      const historyDoc = await getDoc(doc(db, "settings", "adminHistory"));
-      let currentHistory: EmailHistoryEntry[] = [];
-      
-      if (historyDoc.exists()) {
-        currentHistory = historyDoc.data().emails || [];
-      }
-      
-      // Adicionar novo email ao histórico (se não existir)
-      const emailExists = currentHistory.some(entry => entry.email === email);
-      if (!emailExists) {
-        const newEntry: EmailHistoryEntry = {
-          email,
-          date: new Date().toISOString(),
-          uid
-        };
-        
-        currentHistory.unshift(newEntry); // Adiciona no início
-        
-        // Manter apenas os últimos 10 emails
-        if (currentHistory.length > 10) {
-          currentHistory = currentHistory.slice(0, 10);
-        }
-        
-        await setDoc(doc(db, "settings", "adminHistory"), { emails: currentHistory });
-        setEmailHistory(currentHistory);
-      }
-    } catch (error) {
-      console.log("Erro ao salvar histórico:", error);
-    }
-  };
-
-  // ✅ NOVO: Função para recuperar email anterior
-  const handleRecoverEmail = async (previousEmail: string, previousUid?: string) => {
-    if (!confirm(`Deseja recuperar o email anterior?\n\n📧 Email: ${previousEmail}\n\n⚠️ ATENÇÃO:\n- Você precisará definir uma NOVA SENHA\n- Será deslogado automaticamente\n- Faça login com o email recuperado e a nova senha`)) {
-      return;
-    }
-
-    const newPasswordPrompt = prompt("Digite uma NOVA SENHA para este email (mínimo 6 caracteres):");
-    if (!newPasswordPrompt || newPasswordPrompt.length < 6) {
-      alert("❌ Senha inválida. Mínimo 6 caracteres.");
-      return;
-    }
-
-    const currentPasswordPrompt = prompt("Para confirmar, digite sua SENHA ATUAL:");
-    if (!currentPasswordPrompt) {
-      alert("❌ Senha atual é obrigatória.");
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser || !currentUser.email) {
-        alert("❌ Usuário não autenticado.");
-        setIsSaving(false);
-        return;
-      }
-
-      const { setDoc, doc, deleteDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-
-      // Reautentica
-      const credential = EmailAuthProvider.credential(currentUser.email, currentPasswordPrompt);
-      await reauthenticateWithCredential(currentUser, credential);
-
-      const oldUid = currentUser.uid;
-      const oldEmail = currentUser.email;
-
-      // Salvar email atual no histórico antes de mudar
-      await saveEmailToHistory(oldEmail, oldUid);
-
-      // Criar novo usuário com email recuperado
-      let newUserCredential;
-      try {
-        newUserCredential = await createUserWithEmailAndPassword(auth, previousEmail, newPasswordPrompt);
-      } catch (authError: any) {
-        if (authError.code === 'auth/email-already-in-use') {
-          alert("❌ Este email já está cadastrado.\n\nSe você não consegue acessá-lo, use a opção 'Esqueci minha senha' no login.");
-        } else {
-          alert("❌ Erro ao criar usuário: " + authError.message);
-        }
-        setIsSaving(false);
-        return;
-      }
-
-      const newUid = newUserCredential.user.uid;
-
-      // Criar documento do admin recuperado
-      const recoveredAdminData = {
-        ...userData,
-        id: newUid,
-        email: previousEmail
-      };
-
-      await setDoc(doc(db, "users", newUid), recoveredAdminData);
-      await setDoc(doc(db, "settings", "admin"), { email: previousEmail, uid: newUid });
-
-      // Remover documento antigo
-      try {
-        await deleteDoc(doc(db, "users", oldUid));
-      } catch (deleteError) {
-        console.log("Aviso ao remover documento:", deleteError);
-      }
-
-      alert(`✅ EMAIL RECUPERADO COM SUCESSO!
-
-📧 Email recuperado: ${previousEmail}
-🔐 Nova senha: definida
-👑 Permissões: ADMIN
-
-Você será deslogado em 3 segundos.
-Faça login com o email recuperado e a nova senha.`);
-
-      setTimeout(async () => {
-        await signOut(auth);
-      }, 3000);
-
-    } catch (error: any) {
-      console.error("Erro ao recuperar email:", error);
-      if (error.code === 'auth/wrong-password') {
-        alert("❌ Senha atual incorreta.");
-      } else {
-        alert("❌ Erro: " + error.message);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // Função genérica para processar imagem para Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
@@ -234,279 +59,77 @@ Faça login com o email recuperado e a nova senha.`);
     }
   };
 
-  // ✅ FUNÇÃO CORRIGIDA: Agora CRIA automaticamente o usuário no Firebase Authentication
-  const handleChangeCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!currentPassword) {
-      alert("Por favor, digite sua senha atual para confirmar a alteração.");
-      return;
-    }
-
-    if (newPassword && newPassword !== confirmPassword) {
-      alert("A nova senha e a confirmação não coincidem.");
-      return;
-    }
-
-    if (newPassword && newPassword.length < 6) {
-      alert("A nova senha deve ter no mínimo 6 caracteres.");
-      return;
-    }
-
-    // Se não tem email nem senha para alterar
-    if (!newEmail && !newPassword) {
-      alert("Por favor, preencha o novo email e/ou a nova senha.");
-      return;
-    }
-
-    // ✅ VALIDAÇÃO: Se alterar email, PRECISA fornecer nova senha
-    if (newEmail && !newPassword) {
-      alert("⚠️ Para alterar o email, você PRECISA definir uma nova senha também.\n\nIsso garante que você conseguirá fazer login com o novo email.");
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser || !currentUser.email) {
-        alert("Usuário não autenticado.");
-        setIsSaving(false);
-        return;
-      }
-
-      // Importar setDoc e doc do Firebase
-      const { setDoc, doc, deleteDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-
-      // Reautentica o usuário com a senha atual
-      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
-      await reauthenticateWithCredential(currentUser, credential);
-
-      let successMessage = "";
-
-      // ✅ SE ESTÁ ALTERANDO APENAS A SENHA (sem alterar email)
-      if (newPassword && !newEmail) {
-        await updatePassword(currentUser, newPassword);
-        successMessage = "Senha atualizada com sucesso!";
-        
-        alert(successMessage);
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setIsChangingCredentials(false);
-        setIsSaving(false);
-        return;
-      }
-
-      // ✅ SE ESTÁ ALTERANDO O EMAIL (FLUXO COMPLETO DE TRANSFERÊNCIA)
-      if (newEmail && newEmail !== currentUser.email) {
-        console.log("📧 Iniciando transferência de admin para:", newEmail);
-        
-        const oldUid = currentUser.uid;
-        const oldEmail = currentUser.email;
-
-        // ✅ NOVO: Salvar email atual no histórico antes de mudar
-        await saveEmailToHistory(oldEmail, oldUid);
-
-        // PASSO 1: Criar NOVO usuário no Firebase Authentication
-        let newUserCredential;
-        try {
-          console.log("🔐 Criando novo usuário no Firebase Authentication...");
-          newUserCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
-          console.log("✅ Novo usuário criado com UID:", newUserCredential.user.uid);
-        } catch (authError: any) {
-          console.error("❌ Erro ao criar usuário:", authError);
-          if (authError.code === 'auth/email-already-in-use') {
-            alert("❌ Este email já está cadastrado no sistema.\n\nUse outro email ou recupere a senha.");
-          } else if (authError.code === 'auth/invalid-email') {
-            alert("❌ Email inválido.");
-          } else if (authError.code === 'auth/weak-password') {
-            alert("❌ Senha muito fraca. Use no mínimo 6 caracteres.");
-          } else {
-            alert("❌ Erro ao criar novo usuário: " + authError.message);
-          }
-          setIsSaving(false);
-          return;
-        }
-
-        const newUid = newUserCredential.user.uid;
-
-        // PASSO 2: Criar documento do novo usuário admin no Firestore
-        console.log("📄 Criando documento do novo admin no Firestore...");
-        const newAdminData = {
-          ...userData,
-          id: newUid,
-          email: newEmail
-        };
-
-        try {
-          await setDoc(doc(db, "users", newUid), newAdminData);
-          console.log("✅ Documento criado no Firestore");
-        } catch (firestoreError: any) {
-          console.error("❌ Erro ao criar documento:", firestoreError);
-          alert("❌ Erro ao salvar dados no banco: " + firestoreError.message);
-          setIsSaving(false);
-          return;
-        }
-
-        // PASSO 3: Atualizar o email admin nas configurações
-        console.log("⚙️ Atualizando configuração de admin...");
-        try {
-          await setDoc(doc(db, "settings", "admin"), { 
-            email: newEmail,
-            uid: newUid 
-          });
-          console.log("✅ Configuração atualizada");
-        } catch (settingsError: any) {
-          console.log("⚠️ Aviso ao atualizar settings:", settingsError);
-        }
-
-        // PASSO 4: Remover documento do usuário antigo (limpeza)
-        try {
-          console.log("🗑️ Removendo documento antigo...");
-          await deleteDoc(doc(db, "users", oldUid));
-          console.log("✅ Documento antigo removido");
-        } catch (deleteError) {
-          console.log("⚠️ Aviso ao remover documento:", deleteError);
-        }
-
-        successMessage = `✅ TRANSFERÊNCIA CONCLUÍDA!
-
-📧 Novo email: ${newEmail}
-🔐 Nova senha: definida
-👑 Você continua como ADMIN
-
-⚠️ IMPORTANTE:
-- Você será deslogado em 3 segundos
-- Faça login com o NOVO email e senha
-- Email antigo salvo no histórico: ${oldEmail}`;
-
-        alert(successMessage);
-
-        // PASSO 5: Deslogar após 3 segundos
-        console.log("⏳ Aguardando logout...");
-        setTimeout(async () => {
-          console.log("👋 Deslogando...");
-          await signOut(auth);
-        }, 3000);
-      }
-
-    } catch (error: any) {
-      console.error("Erro ao alterar credenciais:", error);
-      
-      if (error.code === 'auth/wrong-password') {
-        alert("Senha atual incorreta.");
-      } else if (error.code === 'auth/email-already-in-use') {
-        alert("Este email já está em uso por outra conta.");
-      } else if (error.code === 'auth/invalid-email') {
-        alert("Email inválido.");
-      } else if (error.code === 'auth/requires-recent-login') {
-        alert("Por segurança, faça logout e login novamente antes de alterar o email.");
-      } else {
-        alert("Erro ao alterar credenciais: " + error.message);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <div className="max-w-7xl mx-auto p-8 space-y-8">
-      <div className="flex items-center justify-between mb-10">
-        <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Configurações</h1>
-        {showSuccess && (
-          <div className="flex items-center gap-2 bg-green-50 border-2 border-green-500 text-green-700 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest">
-            <CheckCircle size={20} />
-            Salvo com sucesso!
-          </div>
-        )}
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-10 pb-32">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tight">CONFIGURAÇÕES</h1>
+          <p className="text-slate-400 font-bold uppercase text-xs tracking-[3px] mt-2">Personalização e Perfil</p>
+        </div>
+        
+        <button 
+          onClick={handleSubmit}
+          disabled={isSaving}
+          className={`flex items-center justify-center gap-3 px-10 py-5 rounded-[24px] font-black text-sm uppercase tracking-widest transition-all shadow-2xl ${
+            showSuccess ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-blue-600'
+          }`}
+        >
+          {isSaving ? 'Salvando...' : showSuccess ? <><CheckCircle size={20}/> Atualizado</> : <><Save size={20}/> Salvar Alterações</>}
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 space-y-10">
+          
           {/* DADOS DA EMPRESA */}
-          <form onSubmit={handleSubmit}>
           <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
               <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                 <ShieldCheck size={24} />
               </div>
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Dados da Empresa</h2>
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Dados do Negócio</h2>
             </div>
 
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Empresa</label>
-                <input 
-                  type="text" 
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                  value={companyData.name}
-                  onChange={e => setCompanyData({...companyData, name: e.target.value})}
-                />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Fantasia</label>
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.name} onChange={e => setCompanyData({...companyData, name: e.target.value})} />
               </div>
-
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
-                <input 
-                  type="text" 
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                  value={companyData.cnpj || ''}
-                  onChange={e => setCompanyData({...companyData, cnpj: e.target.value})}
-                  placeholder="00.000.000/0000-00"
-                />
+                <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={companyData.cnpj} onChange={e => setCompanyData({...companyData, cnpj: e.target.value})} />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone</label>
-                <input 
-                  type="text" 
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                  value={companyData.phone}
-                  onChange={e => setCompanyData({...companyData, phone: e.target.value})}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço</label>
-                <input 
-                  type="text" 
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                  value={companyData.address}
-                  onChange={e => setCompanyData({...companyData, address: e.target.value})}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="w-full bg-blue-600 text-white px-8 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isSaving ? 'Salvando...' : <><Save size={20} /> Salvar Configurações</>}
-              </button>
             </div>
           </section>
-          </form>
 
-          {/* MEUS DADOS */}
+          {/* PERFIL DO USUÁRIO (Foto corrigida) */}
           <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
               <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
                 <UserIcon size={24} />
               </div>
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Meus Dados</h2>
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Meu Perfil</h2>
             </div>
 
-            <div className="space-y-6">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+               <div className="relative group cursor-pointer" onClick={() => profileInputRef.current?.click()}>
+                  <div className="w-32 h-32 rounded-[32px] bg-slate-100 border-4 border-white shadow-xl overflow-hidden flex items-center justify-center">
+                    {userData.profilePhotoUrl ? (
+                      <img src={userData.profilePhotoUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <UserIcon size={40} className="text-slate-300" />
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-purple-600/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-white rounded-[32px]">
+                    <Upload size={20} />
+                  </div>
+                  <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'profile')} />
+               </div>
+
+               <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                    <input 
-                      type="text" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={userData.name}
-                      onChange={e => setUserData({...userData, name: e.target.value})}
-                    />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Seu Nome</label>
+                    <input className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" value={userData.name} onChange={e => setUserData({...userData, name: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
@@ -516,193 +139,6 @@ Faça login com o email recuperado e a nova senha.`);
                   </div>
                </div>
             </div>
-          </section>
-
-          {/* ✅ NOVA SEÇÃO: ALTERAR EMAIL E SENHA */}
-          <section className="bg-white p-8 md:p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
-                  <Lock size={24} />
-                </div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Segurança</h2>
-              </div>
-              
-              <div className="flex gap-2">
-                {/* ✅ NOVO: Botão para ver histórico */}
-                {emailHistory.length > 0 && (
-                  <button
-                    onClick={() => setShowEmailHistory(!showEmailHistory)}
-                    className="bg-slate-100 text-slate-600 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-50 hover:text-green-600 transition-all"
-                    title="Ver histórico de emails"
-                  >
-                    <History size={16} className="inline" />
-                  </button>
-                )}
-                
-                {!isChangingCredentials && (
-                  <button
-                    onClick={() => setIsChangingCredentials(true)}
-                    className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
-                  >
-                    <Key size={16} className="inline mr-2" /> Alterar Email/Senha
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* ✅ NOVO: Histórico de Emails */}
-            {showEmailHistory && emailHistory.length > 0 && (
-              <div className="p-6 bg-green-50 border-2 border-green-200 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-black text-green-900 uppercase tracking-widest flex items-center gap-2">
-                    <History size={16} /> Histórico de Emails Admin
-                  </h3>
-                  <button
-                    onClick={() => setShowEmailHistory(false)}
-                    className="text-green-600 hover:text-green-800 text-xs font-bold"
-                  >
-                    ✕ Fechar
-                  </button>
-                </div>
-                
-                <p className="text-xs text-green-700 font-bold">
-                  Emails anteriores que foram usados como admin. Você pode recuperar qualquer um deles.
-                </p>
-
-                <div className="space-y-2">
-                  {emailHistory.map((entry, index) => (
-                    <div 
-                      key={index}
-                      className="bg-white p-4 rounded-xl border border-green-200 flex items-center justify-between"
-                    >
-                      <div className="flex-1">
-                        <p className="font-bold text-slate-800 text-sm">{entry.email}</p>
-                        <p className="text-[10px] text-slate-400 font-bold">
-                          Alterado em: {new Date(entry.date).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleRecoverEmail(entry.email, entry.uid)}
-                        disabled={isSaving || entry.email === userData.email}
-                        className="bg-green-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-green-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        <RotateCcw size={14} /> Recuperar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {isChangingCredentials ? (
-              <form onSubmit={handleChangeCredentials} className="space-y-6">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-                  <p className="text-xs font-bold text-amber-800">
-                    ⚠️ Por segurança, você precisa confirmar sua senha atual para fazer alterações.
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Atual *</label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                    value={currentPassword}
-                    onChange={e => setCurrentPassword(e.target.value)}
-                    placeholder="Digite sua senha atual"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Novo Email (Opcional)</label>
-                    <input 
-                      type="email" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
-                      placeholder="novo@email.com"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nova Senha {newEmail ? '*' : '(Opcional)'}</label>
-                    <input 
-                      type="password" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    {newEmail && (
-                      <p className="text-[9px] text-red-600 font-bold ml-1">
-                        * Obrigatório ao alterar email
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {newPassword && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirmar Nova Senha</label>
-                    <input 
-                      type="password" 
-                      required
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-0 font-bold" 
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="Digite novamente"
-                    />
-                  </div>
-                )}
-
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
-                  <p className="text-xs font-bold text-blue-800">
-                    🔐 Você continuará como ADMIN mesmo após alterar o email!
-                  </p>
-                  <p className="text-xs text-blue-600 mt-2">
-                    {newEmail 
-                      ? "Um novo usuário será criado automaticamente. O email atual será salvo no histórico e poderá ser recuperado depois."
-                      : "Após a alteração, faça logout e entre com as novas credenciais."
-                    }
-                  </p>
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50"
-                  >
-                    {isSaving ? 'Processando...' : 'Confirmar Alteração'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsChangingCredentials(false);
-                      setCurrentPassword('');
-                      setNewEmail('');
-                      setNewPassword('');
-                      setConfirmPassword('');
-                    }}
-                    className="bg-slate-100 text-slate-600 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-400 font-bold text-sm">
-                  Email atual: <span className="text-slate-800">{userData.email}</span>
-                </p>
-                <p className="text-slate-300 font-bold text-xs mt-2">
-                  Senha: ••••••••
-                </p>
-              </div>
-            )}
           </section>
         </div>
 
