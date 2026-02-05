@@ -4,6 +4,7 @@ import { Plus, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, Li
 import { Rental, RentalStatus, Customer, Toy, User, UserRole, PaymentMethod } from '../types';
 import { deleteDoc, doc, setDoc } from "firebase/firestore";
 import { db } from '../firebase';
+
 interface RentalsProps {
   rentals: Rental[];
   setRentals: React.Dispatch<React.SetStateAction<Rental[]>>;
@@ -323,6 +324,7 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
       setFormData(prev => ({ ...prev, customerId: newCustomer.id, eventAddress: newCustomer.address || '' }));
       setIsAddingCustomer(false);
       setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
+      alert("Cliente salvo");
     } catch (error) {
       console.error("Erro ao criar cliente:", error);
       alert("Erro ao criar o cliente. Tente novamente.");
