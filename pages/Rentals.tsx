@@ -311,25 +311,48 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
   };
 
   const handleAddNewCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const newCustomer: Customer = { 
-      id: `c${Date.now()}`, 
-      createdAt: new Date().toISOString(), 
-      ...(newCustomerData as any) 
-    };
-    
-    try {
-      await setDoc(doc(db, "customers", newCustomer.id), newCustomer);
-      setCustomers(prev => [...prev, newCustomer]);
-      setFormData(prev => ({ ...prev, customerId: newCustomer.id, eventAddress: newCustomer.address || '' }));
-      setIsAddingCustomer(false);
-      setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
-      alert("Cliente salvo");
-    } catch (error) {
-      console.error("Erro ao criar cliente:", error);
-      alert("Erro ao criar o cliente. Tente novamente.");
-    }
+  e.preventDefault();
+  
+  // Cria o ID e a data de criação
+  const customerId = `c${Date.now()}`;
+  
+  // Monta o objeto garantindo que não existam campos 'undefined'
+  const newCustomer: Customer = { 
+    id: customerId, 
+    createdAt: new Date().toISOString(),
+    name: newCustomerData.name || '',
+    phone: newCustomerData.phone || '',
+    address: newCustomerData.address || '',
+    isCompany: !!newCustomerData.isCompany,
+    cnpj: newCustomerData.cnpj || '',
+    cpf: newCustomerData.cpf || '',
+    notes: newCustomerData.notes || ''
   };
+  
+  try {
+    // Salva no Firestore
+    await setDoc(doc(db, "customers", customerId), newCustomer);
+    
+    // Atualiza o estado local da lista de clientes
+    setCustomers(prev => [...prev, newCustomer]);
+    
+    // Seleciona automaticamente o novo cliente no formulário de reserva
+    setFormData(prev => ({ 
+      ...prev, 
+      customerId: customerId, 
+      eventAddress: newCustomer.address 
+    }));
+    
+    // Fecha o mini-formulário e limpa os dados
+    setIsAddingCustomer(false);
+    setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
+    
+    alert("Cliente cadastrado com sucesso!"); // Opcional, para confirmação visual
+  } catch (error) {
+    console.error("Erro ao criar cliente:", error);
+    alert("Erro ao criar o cliente no banco de dados. Verifique sua conexão ou permissões.");
+  }
+};
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
