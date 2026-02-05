@@ -310,49 +310,44 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     });
   };
 
+  // ✅ CORREÇÃO: SALVAMENTO DE CLIENTE PADRONIZADO E SEM ERRO
   const handleAddNewCustomer = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  // Cria o ID e a data de criação
-  const customerId = `c${Date.now()}`;
-  
-  // Monta o objeto garantindo que não existam campos 'undefined'
-  const newCustomer: Customer = { 
-    id: customerId, 
-    createdAt: new Date().toISOString(),
-    name: newCustomerData.name || '',
-    phone: newCustomerData.phone || '',
-    address: newCustomerData.address || '',
-    isCompany: !!newCustomerData.isCompany,
-    cnpj: newCustomerData.cnpj || '',
-    cpf: newCustomerData.cpf || '',
-    notes: newCustomerData.notes || ''
+    e.preventDefault();
+    
+    const customerId = `c${Date.now()}`;
+    const newCustomer: Customer = { 
+      id: customerId, 
+      createdAt: new Date().toISOString(), 
+      name: newCustomerData.name || '',
+      phone: newCustomerData.phone || '',
+      address: newCustomerData.address || '',
+      isCompany: !!newCustomerData.isCompany,
+      cnpj: newCustomerData.cnpj || '',
+      cpf: newCustomerData.cpf || '',
+      notes: newCustomerData.notes || ''
+    };
+    
+    try {
+      await setDoc(doc(db, "customers", customerId), newCustomer);
+      setCustomers(prev => [...prev, newCustomer]);
+      
+      // Vincula o cliente novo à reserva atual
+      setFormData(prev => ({ 
+        ...prev, 
+        customerId: customerId, 
+        eventAddress: newCustomer.address 
+      }));
+      
+      // Fecha o mini-form e limpa
+      setIsAddingCustomer(false);
+      setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
+      
+      alert("Cliente salvo");
+    } catch (error) {
+      console.error("Erro ao criar cliente:", error);
+      alert("Erro ao salvar cliente no banco de dados.");
+    }
   };
-  
-  try {
-    // Salva no Firestore
-    await setDoc(doc(db, "customers", customerId), newCustomer);
-    
-    // Atualiza o estado local da lista de clientes
-    setCustomers(prev => [...prev, newCustomer]);
-    
-    // Seleciona automaticamente o novo cliente no formulário de reserva
-    setFormData(prev => ({ 
-      ...prev, 
-      customerId: customerId, 
-      eventAddress: newCustomer.address 
-    }));
-    
-    // Fecha o mini-formulário e limpa os dados
-    setIsAddingCustomer(false);
-    setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
-    
-    alert("Cliente cadastrado com sucesso!"); // Opcional, para confirmação visual
-  } catch (error) {
-    console.error("Erro ao criar cliente:", error);
-    alert("Erro ao criar o cliente no banco de dados. Verifique sua conexão ou permissões.");
-  }
-};
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -361,6 +356,7 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     const selectedToyIds = formData.toyIds || [];
     const toysBlocked: string[] = [];
 
+    // ✅ LÓGICA DE AVISO: VERIFICA SE JÁ EXISTEM RESERVAS PARA O DIA
     selectedToyIds.forEach(tid => {
       const toy = toys.find(t => t.id === tid);
       if (!toy) return;
@@ -372,13 +368,21 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
         r.id !== editingRental?.id
       ).length;
 
-      if (unitsRented + 1 > toy.quantity) {
+      // Se atingiu o limite de estoque, adiciona na lista de aviso
+      if (unitsRented >= toy.quantity) {
         toysBlocked.push(toy.name);
       }
     });
 
+    // Se houver conflito, apenas avisa e pede confirmação para prosseguir
     if (toysBlocked.length > 0) {
-      return alert('🚫 BRINQUEDO INDISPONÍVEL!\n\nOs itens abaixo já atingiram o limite de estoque para o dia ' + new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n• ' + toysBlocked.join('\n• '));
+      const msg = '⚠️ AVISO DE DISPONIBILIDADE\n\n' +
+                  'Os itens abaixo já possuem reservas para o dia ' + 
+                  new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n• ' + 
+                  toysBlocked.join('\n• ') + 
+                  '\n\nDeseja confirmar este agendamento mesmo assim?';
+      
+      if (!confirm(msg)) return;
     }
     
     const customer = customers.find(c => c.id === formData.customerId);
