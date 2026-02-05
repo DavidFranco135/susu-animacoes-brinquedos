@@ -369,31 +369,36 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     if (!formData.customerId) return alert("Selecione um cliente");
 
     const selectedToyIds = formData.toyIds || [];
-    const toysBlocked: string[] = [];
+    const conflictDetails: string[] = [];
 
     selectedToyIds.forEach(tid => {
       const toy = toys.find(t => t.id === tid);
       if (!toy) return;
 
-      const unitsRented = rentals.filter(r => 
+      const conflictingRentals = rentals.filter(r => 
         r.date === formData.date && 
         r.toyIds.includes(tid) && 
         r.status !== RentalStatus.CANCELLED &&
         r.id !== editingRental?.id
-      ).length;
+      );
 
-      // Se atingiu o limite de estoque, adiciona na lista de aviso
-      if (unitsRented >= toy.quantity) {
-        toysBlocked.push(toy.name);
+      if (conflictingRentals.length >= toy.quantity) {
+        conflictingRentals.forEach(conflictRental => {
+          const sameTime = conflictRental.startTime === formData.startTime && conflictRental.endTime === formData.endTime;
+          const timeInfo = sameTime 
+            ? `no MESMO HORÁRIO (${conflictRental.startTime} - ${conflictRental.endTime})`
+            : `em horário diferente (${conflictRental.startTime} - ${conflictRental.endTime})`;
+          
+          conflictDetails.push(`• ${toy.name} - já reservado para "${conflictRental.customerName}" ${timeInfo}`);
+        });
       }
     });
 
-    // Se houver conflito, apenas avisa e pede confirmação para prosseguir
-    if (toysBlocked.length > 0) {
+    if (conflictDetails.length > 0) {
       const msg = '⚠️ AVISO DE DISPONIBILIDADE\n\n' +
-                  'Os itens abaixo já possuem reservas para o dia ' + 
-                  new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n• ' + 
-                  toysBlocked.join('\n• ') + 
+                  'Conflitos encontrados para o dia ' + 
+                  new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n' + 
+                  conflictDetails.join('\n') + 
                   '\n\nDeseja confirmar este agendamento mesmo assim?';
       
       if (!confirm(msg)) return;
