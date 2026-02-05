@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, List, CalendarDays, BarChart3, Clock, CheckCircle2, MapPin, UserPlus, FileSpreadsheet, Download, Phone, Share2, MessageCircle, Trash2, ClipboardList, Filter, DollarSign } from 'lucide-react';
+import { Plus, Building2, Users, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, List, CalendarDays, BarChart3, Clock, CheckCircle2, MapPin, UserPlus, FileSpreadsheet, Download, Phone, Share2, MessageCircle, Trash2, ClipboardList, Filter, DollarSign } from 'lucide-react';
 import { Rental, RentalStatus, Customer, Toy, User, UserRole, PaymentMethod } from '../types';
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from '../firebase';
@@ -44,7 +44,17 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
 
   // Estado para controlar quantidade de cada brinquedo
   const [toyQuantities, setToyQuantities] = useState<{[key: string]: number}>({});
-
+// ✅ NOVO: Estado para controlar modal de novo cliente
+const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
+const [newCustomerData, setNewCustomerData] = useState<Partial<Customer>>({
+  name: '',
+  phone: '',
+  address: '',
+  isCompany: false,
+  cnpj: '',
+  cpf: '',
+  notes: ''
+});
   const handleOpenModal = (rental?: Rental) => {
     if (rental) {
       setEditingRental(rental);
@@ -319,7 +329,48 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
         window.open(shareUrl, '_blank');
     });
   };
-
+// ✅ NOVA FUNÇÃO: Salvar novo cliente e selecionar automaticamente
+const handleSaveNewCustomer = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  const newCustomer: Customer = {
+    id: `c${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    ...newCustomerData as any
+  };
+  
+  try {
+    // Salva no Firestore
+    await setDoc(doc(db, "customers", newCustomer.id), newCustomer);
+    
+    // Atualiza a lista local
+    setCustomers(prev => [...prev, newCustomer]);
+    
+    // Seleciona automaticamente o novo cliente
+    setFormData({
+      ...formData,
+      customerId: newCustomer.id,
+      eventAddress: newCustomer.address || ''
+    });
+    
+    // Limpa o formulário e fecha o modal
+    setNewCustomerData({
+      name: '',
+      phone: '',
+      address: '',
+      isCompany: false,
+      cnpj: '',
+      cpf: '',
+      notes: ''
+    });
+    setIsNewCustomerModalOpen(false);
+    
+    alert('✅ Cliente adicionado e selecionado com sucesso!');
+  } catch (error) {
+    console.error('Erro ao salvar cliente:', error);
+    alert('❌ Erro ao salvar o cliente. Tente novamente.');
+  }
+};
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.customerId) return alert("Selecione um cliente");
@@ -473,6 +524,7 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
               </div>
           )}
       </div>
+      
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredRentals.length === 0 ? (
@@ -584,15 +636,24 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente</label>
-                          <select required className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20 outline-none" value={formData.customerId} onChange={e => {
-                              const customer = customers.find(c => c.id === e.target.value);
-                              setFormData({...formData, customerId: e.target.value, eventAddress: customer?.address || ''});
-                          }}>
-                              <option value="">Selecione um cliente...</option>
-                              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                      </div>
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
+        <span>Cliente</span>
+        <button
+            type="button"
+            onClick={() => setIsNewCustomerModalOpen(true)}
+            className="text-blue-600 hover:text-blue-700 font-black text-xs flex items-center gap-1 hover:underline"
+        >
+            <UserPlus size={14} /> Novo Cliente
+        </button>
+    </label>
+    <select required className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20 outline-none" value={formData.customerId} onChange={e => {
+        const customer = customers.find(c => c.id === e.target.value);
+        setFormData({...formData, customerId: e.target.value, eventAddress: customer?.address || ''});
+    }}>
+        <option value="">Selecione um cliente...</option>
+        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+</div>
 
                       <div className="space-y-1">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status da Reserva</label>
@@ -640,6 +701,111 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
                               </select>
                           </div>
                       </div>
+                    {/* ✅ MODAL DE NOVO CLIENTE */}
+{isNewCustomerModalOpen && (
+  <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+    <form onSubmit={handleSaveNewCustomer} className="bg-white w-full max-w-lg rounded-[40px] p-8 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center">
+        <h3 className="text-2xl font-black text-slate-800 tracking-tight">Novo Cliente</h3>
+        <button 
+          type="button" 
+          onClick={() => setIsNewCustomerModalOpen(false)} 
+          className="p-3 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-2xl transition-all"
+        >
+          <X size={20}/>
+        </button>
+      </div>
+      
+      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100">
+        <label className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl cursor-pointer font-black text-[10px] uppercase tracking-widest transition-all ${!newCustomerData.isCompany ? 'bg-white border border-blue-100 text-blue-600' : 'bg-transparent text-slate-400'}`}>
+          <input 
+            type="radio" 
+            className="hidden" 
+            checked={!newCustomerData.isCompany} 
+            onChange={() => setNewCustomerData({...newCustomerData, isCompany: false})} 
+          /> 
+          Pessoa Física
+        </label>
+        <label className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl cursor-pointer font-black text-[10px] uppercase tracking-widest transition-all ${newCustomerData.isCompany ? 'bg-white border border-blue-100 text-blue-600' : 'bg-transparent text-slate-400'}`}>
+          <input 
+            type="radio" 
+            className="hidden" 
+            checked={newCustomerData.isCompany} 
+            onChange={() => setNewCustomerData({...newCustomerData, isCompany: true})} 
+          /> 
+          Empresa (PJ)
+        </label>
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+            Nome / Razão Social *
+          </label>
+          <input 
+            required 
+            className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+            value={newCustomerData.name} 
+            onChange={e => setNewCustomerData({...newCustomerData, name: e.target.value})} 
+            placeholder="Digite o nome completo"
+          />
+        </div>
+        
+        {newCustomerData.isCompany ? (
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
+            <input 
+              className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+              value={newCustomerData.cnpj} 
+              onChange={e => setNewCustomerData({...newCustomerData, cnpj: e.target.value})} 
+              placeholder="00.000.000/0001-00" 
+            />
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CPF</label>
+            <input 
+              className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+              value={newCustomerData.cpf} 
+              onChange={e => setNewCustomerData({...newCustomerData, cpf: e.target.value})} 
+              placeholder="000.000.000-00" 
+            />
+          </div>
+        )}
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp *</label>
+          <input 
+            required 
+            className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+            value={newCustomerData.phone} 
+            onChange={e => setNewCustomerData({...newCustomerData, phone: e.target.value})} 
+            placeholder="(00) 00000-0000"
+          />
+        </div>
+        
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Principal *</label>
+          <textarea 
+            required 
+            rows={2} 
+            className="w-full px-6 py-4 bg-slate-50 border-0 rounded-2xl font-bold resize-none outline-none focus:ring-2 focus:ring-blue-500/20" 
+            value={newCustomerData.address} 
+            onChange={e => setNewCustomerData({...newCustomerData, address: e.target.value})} 
+            placeholder="Rua, número, bairro, cidade"
+          />
+        </div>
+      </div>
+
+      <button 
+        type="submit" 
+        className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black uppercase tracking-widest shadow-xl hover:bg-blue-700 transition-all"
+      >
+        ✨ Salvar e Selecionar Cliente
+      </button>
+    </form>
+  </div>
+)}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-4 bg-slate-50 rounded-3xl">
                           {filteredToys.length === 0 ? (
