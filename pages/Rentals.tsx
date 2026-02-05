@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, List, CalendarDays, BarChart3, Clock, CheckCircle2, MapPin, UserPlus, FileSpreadsheet, Download, Phone, Share2, MessageCircle, Trash2, ClipboardList, Filter, DollarSign, Building2, Users } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Edit3, Calendar as CalendarIcon, List, CalendarDays, BarChart3, Clock, CheckCircle2, MapPin, UserPlus, FileSpreadsheet, Download, Phone, Share2, MessageCircle, Trash2, ClipboardList, Filter, DollarSign, Building2, Users, Search } from 'lucide-react';
 import { Rental, RentalStatus, Customer, Toy, User, UserRole, PaymentMethod } from '../types';
-import { deleteDoc, doc } from "firebase/firestore";
+import { deleteDoc, doc, setDoc } from "firebase/firestore";
 import { db } from '../firebase';
 
 interface RentalsProps {
@@ -21,6 +21,9 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState<string>('TODAS');
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
@@ -87,24 +90,45 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
   };
 
   const filteredRentals = useMemo(() => {
-    const filtered = rentals.filter(rental => {
+    return rentals.filter(rental => {
       const rentalDate = new Date(rental.date + 'T00:00:00');
+      
+      // Filtro por período (Mês/Ano/Lista)
+      let periodMatch = true;
       if (viewTab === 'Mês') {
-        return rentalDate.getMonth() === currentDate.getMonth() && 
+        periodMatch = rentalDate.getMonth() === currentDate.getMonth() && 
                rentalDate.getFullYear() === currentDate.getFullYear();
+      } else if (viewTab === 'Ano') {
+        periodMatch = rentalDate.getFullYear() === currentDate.getFullYear();
       }
-      if (viewTab === 'Ano') {
-        return rentalDate.getFullYear() === currentDate.getFullYear();
+      
+      // Filtro por data customizada (quando preenchido, sobrescreve o filtro de período)
+      if (startDateFilter || endDateFilter) {
+        const rentalDateOnly = rental.date;
+        if (startDateFilter && rentalDateOnly < startDateFilter) {
+          periodMatch = false;
+        }
+        if (endDateFilter && rentalDateOnly > endDateFilter) {
+          periodMatch = false;
+        }
       }
-      return true;
-    });
-    
-    // Ordenação: crescente (mais antigo primeiro) na Lista, decrescente nas outras abas
-    if (viewTab === 'Lista') {
-      return filtered.sort((a, b) => a.date.localeCompare(b.date));
-    }
-    return filtered.sort((a, b) => b.date.localeCompare(a.date));
-  }, [rentals, currentDate, viewTab]);
+      
+      // Filtro por busca (nome ou documento)
+      let searchMatch = true;
+      if (searchTerm) {
+        const customer = customers.find(c => c.id === rental.customerId);
+        const searchLower = searchTerm.toLowerCase();
+        searchMatch = 
+          rental.customerName?.toLowerCase().includes(searchLower) ||
+          customer?.cpf?.includes(searchTerm) ||
+          customer?.cnpj?.includes(searchTerm) ||
+          customer?.phone?.includes(searchTerm) ||
+          false;
+      }
+      
+      return periodMatch && searchMatch;
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }, [rentals, currentDate, viewTab, searchTerm, startDateFilter, endDateFilter, customers]);
 
   const filteredToys = useMemo(() => {
     if (selectedCategory === 'TODAS') return toys;
@@ -316,38 +340,24 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     });
   };
 
-  // ✅ CORREÇÃO: SALVAMENTO DE CLIENTE PADRONIZADO E SEM ERRO
-  const handleAddNewCustomer = (e: React.FormEvent) => {
+  const handleAddNewCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const customerId = `c${Date.now()}`;
     const newCustomer: Customer = { 
-      id: customerId, 
+      id: `c${Date.now()}`, 
       createdAt: new Date().toISOString(), 
-      name: newCustomerData.name || '',
-      phone: newCustomerData.phone || '',
-      address: newCustomerData.address || '',
-      isCompany: !!newCustomerData.isCompany,
-      cnpj: newCustomerData.cnpj || '',
-      cpf: newCustomerData.cpf || '',
-      notes: newCustomerData.notes || ''
+      ...(newCustomerData as any) 
     };
     
-    // Adiciona o cliente à lista (o App.tsx vai salvar no Firebase automaticamente)
-    setCustomers(prev => [...prev, newCustomer]);
-    
-    // Vincula o cliente novo à reserva atual
-    setFormData(prev => ({ 
-      ...prev, 
-      customerId: customerId, 
-      eventAddress: newCustomer.address 
-    }));
-    
-    // Fecha o mini-form e limpa
-    setIsAddingCustomer(false);
-    setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
-    
-    alert("✅ Cliente salvo com sucesso!");
+    try {
+      await setDoc(doc(db, "customers", newCustomer.id), newCustomer);
+      setCustomers(prev => [...prev, newCustomer]);
+      setFormData(prev => ({ ...prev, customerId: newCustomer.id, eventAddress: newCustomer.address || '' }));
+      setIsAddingCustomer(false);
+      setNewCustomerData({ name: '', phone: '', address: '', isCompany: false, cnpj: '', cpf: '', notes: '' });
+    } catch (error) {
+      console.error("Erro ao criar cliente:", error);
+      alert("Erro ao criar o cliente. Tente novamente.");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -357,7 +367,6 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
     const selectedToyIds = formData.toyIds || [];
     const toysBlocked: string[] = [];
 
-    // ✅ LÓGICA DE AVISO: VERIFICA SE JÁ EXISTEM RESERVAS PARA O DIA
     selectedToyIds.forEach(tid => {
       const toy = toys.find(t => t.id === tid);
       if (!toy) return;
@@ -369,21 +378,13 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
         r.id !== editingRental?.id
       ).length;
 
-      // Se atingiu o limite de estoque, adiciona na lista de aviso
-      if (unitsRented >= toy.quantity) {
+      if (unitsRented + 1 > toy.quantity) {
         toysBlocked.push(toy.name);
       }
     });
 
-    // Se houver conflito, apenas avisa e pede confirmação para prosseguir
     if (toysBlocked.length > 0) {
-      const msg = '⚠️ AVISO DE DISPONIBILIDADE\n\n' +
-                  'Os itens abaixo já possuem reservas para o dia ' + 
-                  new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n• ' + 
-                  toysBlocked.join('\n• ') + 
-                  '\n\nDeseja confirmar este agendamento mesmo assim?';
-      
-      if (!confirm(msg)) return;
+      return alert('🚫 BRINQUEDO INDISPONÍVEL!\n\nOs itens abaixo já atingiram o limite de estoque para o dia ' + new Date(formData.date! + 'T00:00:00').toLocaleDateString('pt-BR') + ':\n\n• ' + toysBlocked.join('\n• '));
     }
     
     const customer = customers.find(c => c.id === formData.customerId);
@@ -487,6 +488,56 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
           </div>
       </div>
 
+      {/* BARRA DE BUSCA E FILTROS */}
+      <div className="bg-white rounded-3xl border p-6 shadow-sm print:hidden space-y-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Campo de Busca */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome, CPF, CNPJ ou telefone..." 
+              className="w-full pl-16 pr-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700 text-sm border-0 focus:ring-2 focus:ring-blue-500/20" 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)} 
+            />
+          </div>
+        </div>
+
+        {/* Filtros de Data */}
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-1 space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data Inicial</label>
+            <input 
+              type="date" 
+              className="w-full px-6 py-3 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm" 
+              value={startDateFilter} 
+              onChange={e => setStartDateFilter(e.target.value)} 
+            />
+          </div>
+          <div className="flex-1 space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data Final</label>
+            <input 
+              type="date" 
+              className="w-full px-6 py-3 bg-slate-50 rounded-2xl font-bold border-0 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm" 
+              value={endDateFilter} 
+              onChange={e => setEndDateFilter(e.target.value)} 
+            />
+          </div>
+          {(startDateFilter || endDateFilter) && (
+            <button 
+              onClick={() => {
+                setStartDateFilter('');
+                setEndDateFilter('');
+              }}
+              className="px-6 py-3 bg-red-50 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
+            >
+              Limpar Filtros
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row gap-6 print:hidden">
           <div className="flex gap-2 bg-white p-2 rounded-3xl border shadow-sm">
               {(['Mês', 'Ano', 'Lista'] as const).map(tab => (
@@ -510,266 +561,104 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
           )}
       </div>
 
-      {/* RENDERIZAÇÃO CONDICIONAL: LISTA OU CARDS */}
-      {viewTab === 'Lista' ? (
-          /* ═══════════════════════════════════════════════════════════════
-             ABA LISTA - FORMATO TABELA SIMPLES ORDENADA POR DATA
-             ═══════════════════════════════════════════════════════════════ */
-          <div className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm">
-              <table className="w-full text-left">
-                  <thead className="bg-slate-50/50 text-[11px] font-black uppercase text-slate-400 tracking-wider border-b-2 border-slate-200">
-                      <tr>
-                          <th className="px-8 py-5">Data</th>
-                          <th className="px-8 py-5">Cliente</th>
-                          <th className="px-8 py-5">Horário</th>
-                          <th className="px-8 py-5">Status</th>
-                          <th className="px-8 py-5 text-right">Valor Total</th>
-                          <th className="px-8 py-5 text-right">Ações</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                      {filteredRentals.length === 0 ? (
-                          <tr>
-                              <td colSpan={6} className="px-8 py-20 text-center">
-                                  <CalendarDays size={64} className="mx-auto text-slate-200 mb-4" />
-                                  <p className="text-slate-400 font-bold text-lg">Nenhuma reserva encontrada.</p>
-                              </td>
-                          </tr>
-                      ) : (
-                          filteredRentals.map(rental => {
-                              const pending = rental.totalValue - rental.entryValue;
-                              const statusConfig = {
-                                  [RentalStatus.PENDING]: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Pendente' },
-                                  [RentalStatus.CONFIRMED]: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Confirmado' },
-                                  [RentalStatus.COMPLETED]: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Concluído' },
-                                  [RentalStatus.CANCELLED]: { bg: 'bg-red-50', text: 'text-red-700', label: 'Cancelado' }
-                              };
-                              const config = statusConfig[rental.status];
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredRentals.length === 0 ? (
+              <div className="col-span-full text-center py-20">
+                  <CalendarDays size={64} className="mx-auto text-slate-200 mb-4" />
+                  <p className="text-slate-400 font-bold text-lg">Nenhum evento encontrado.</p>
+                  <p className="text-slate-400 text-sm mt-2">Ajuste os filtros ou busca para ver mais resultados.</p>
+              </div>
+          ) : (
+              filteredRentals.map(rental => {
+                  const rentalToys = toys.filter(t => rental.toyIds.includes(t.id));
+                  const pending = rental.totalValue - rental.entryValue;
 
-                              return (
-                                  <tr key={rental.id} className="hover:bg-slate-50/50 transition-colors">
-                                      {/* DATA */}
-                                      <td className="px-8 py-6">
-                                          <div>
-                                              <p className="font-black text-slate-900 text-sm">
-                                                  {new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR', { 
-                                                      day: '2-digit', 
-                                                      month: 'short', 
-                                                      year: 'numeric' 
-                                                  })}
-                                              </p>
-                                              <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                                  {new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}
-                                              </p>
-                                          </div>
-                                      </td>
-
-                                      {/* CLIENTE */}
-                                      <td className="px-8 py-6">
-                                          <div>
-                                              <p className="font-black text-slate-800 uppercase tracking-tight text-sm">{rental.customerName}</p>
-                                              {rental.eventAddress && (
-                                                  <p className="text-xs text-slate-400 font-bold flex items-center gap-1 mt-1">
-                                                      <MapPin size={10}/> {rental.eventAddress.substring(0, 30)}...
-                                                  </p>
-                                              )}
-                                          </div>
-                                      </td>
-
-                                      {/* HORÁRIO */}
-                                      <td className="px-8 py-6">
-                                          <div className="flex items-center gap-1 text-slate-600 font-bold text-sm">
-                                              <Clock size={14} className="text-slate-400"/>
-                                              {rental.startTime} - {rental.endTime}
-                                          </div>
-                                      </td>
-
-                                      {/* STATUS */}
-                                      <td className="px-8 py-6">
-                                          <span className={`inline-flex px-4 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest ${config.bg} ${config.text}`}>
-                                              {config.label}
-                                          </span>
-                                      </td>
-
-                                      {/* VALOR */}
-                                      <td className="px-8 py-6 text-right">
-                                          <div>
-                                              <p className="font-black text-slate-900 text-lg">R$ {rental.totalValue.toLocaleString('pt-BR')}</p>
-                                              {pending > 0 && (
-                                                  <p className="text-xs font-bold text-yellow-600">
-                                                      Pendente: R$ {pending.toLocaleString('pt-BR')}
-                                                  </p>
-                                              )}
-                                          </div>
-                                      </td>
-
-                                      {/* AÇÕES */}
-                                      <td className="px-8 py-6">
-                                          <div className="flex justify-end gap-2">
-                                              <button 
-                                                  onClick={() => handleSendWhatsApp(rental)} 
-                                                  className="p-3 bg-green-50 text-green-600 rounded-2xl hover:bg-green-600 hover:text-white transition-all" 
-                                                  title="WhatsApp"
-                                              >
-                                                  <MessageCircle size={16}/>
-                                              </button>
-                                              {rental.status !== RentalStatus.COMPLETED && rental.status !== RentalStatus.CANCELLED && (
-                                                  <button 
-                                                      onClick={() => handleCompleteEvent(rental)} 
-                                                      className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all" 
-                                                      title="Concluir"
-                                                  >
-                                                      <CheckCircle2 size={16}/>
-                                                  </button>
-                                              )}
-                                              <button 
-                                                  onClick={() => handleOpenModal(rental)} 
-                                                  className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all" 
-                                                  title="Editar"
-                                              >
-                                                  <Edit3 size={16}/>
-                                              </button>
-                                              <button 
-                                                  onClick={() => handleCopyLink(rental)} 
-                                                  className="p-3 bg-purple-50 text-purple-600 rounded-2xl hover:bg-purple-600 hover:text-white transition-all" 
-                                                  title="Compartilhar"
-                                              >
-                                                  <Share2 size={16}/>
-                                              </button>
-                                              <button 
-                                                  onClick={() => handleDeleteRental(rental.id)} 
-                                                  className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all" 
-                                                  title="Excluir"
-                                              >
-                                                  <Trash2 size={16}/>
-                                              </button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                              );
-                          })
-                      )}
-                  </tbody>
-              </table>
-
-              {/* RESUMO FINANCEIRO NO RODAPÉ */}
-              {filteredRentals.length > 0 && (
-                  <div className="border-t-2 border-slate-200 bg-slate-50 px-8 py-6 flex justify-between items-center">
-                      <div>
-                          <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Total de Reservas</p>
-                          <p className="text-2xl font-black text-slate-900">{filteredRentals.length}</p>
-                      </div>
-                      <div className="text-right">
-                          <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Faturamento Total</p>
-                          <p className="text-2xl font-black text-blue-600">
-                              R$ {filteredRentals.reduce((acc, r) => acc + r.totalValue, 0).toLocaleString('pt-BR')}
-                          </p>
-                      </div>
-                  </div>
-              )}
-          </div>
-      ) : (
-          /* ═══════════════════════════════════════════════════════════════
-             ABAS MÊS E ANO - FORMATO CARDS (MANTIDO ORIGINAL)
-             ═══════════════════════════════════════════════════════════════ */
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredRentals.length === 0 ? (
-                  <div className="col-span-full text-center py-20">
-                      <CalendarDays size={64} className="mx-auto text-slate-200 mb-4" />
-                      <p className="text-slate-400 font-bold text-lg">Nenhum evento agendado para este período.</p>
-                  </div>
-              ) : (
-                  filteredRentals.map(rental => {
-                      const rentalToys = toys.filter(t => rental.toyIds.includes(t.id));
-                      const pending = rental.totalValue - rental.entryValue;
-
-                      return (
-                          <div key={rental.id} className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all group">
-                              <div className={'p-6 border-b ' + (
-                                  rental.status === RentalStatus.COMPLETED ? 'bg-emerald-50 text-emerald-600' :
-                                  rental.status === RentalStatus.CONFIRMED ? 'bg-blue-50 text-blue-600' :
-                                  rental.status === RentalStatus.PENDING ? 'bg-yellow-50 text-yellow-600' :
-                                  'bg-red-50 text-red-600'
-                              )}>
-                                  <div className="flex justify-between items-center">
-                                      <span className="text-[10px] font-black uppercase tracking-widest">{rental.status}</span>
-                                      <span className="text-xs font-bold">#{rental.id.slice(-6).toUpperCase()}</span>
-                                  </div>
-                              </div>
-
-                              <div className="p-6 space-y-6">
-                                  <div>
-                                      <h3 className="text-xl font-black text-slate-800 mb-1">{rental.customerName}</h3>
-                                      <p className="text-xs text-slate-400 font-bold uppercase flex items-center gap-1"><MapPin size={12}/> {rental.eventAddress}</p>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-1">
-                                          <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1"><CalendarIcon size={10}/> Data</p>
-                                          <p className="font-bold text-slate-800">{new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
-                                      </div>
-                                      <div className="space-y-1">
-                                          <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1"><Clock size={10}/> Horário</p>
-                                          <p className="font-bold text-slate-800">{rental.startTime} - {rental.endTime}</p>
-                                      </div>
-                                  </div>
-
-                                  <div className="pt-4 border-t border-slate-50">
-                                      <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Itens Locados ({rentalToys.length})</p>
-                                      <div className="flex flex-wrap gap-2">
-                                          {rentalToys.slice(0, 3).map(toy => (
-                                              <span key={toy.id} className="px-3 py-1 bg-slate-50 text-slate-600 rounded-full text-[10px] font-bold">{toy.name}</span>
-                                          ))}
-                                          {rentalToys.length > 3 && <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold">+{rentalToys.length - 3}</span>}
-                                      </div>
-                                      {rental.additionalService && rental.additionalServiceValue && rental.additionalServiceValue > 0 && (
-                                          <div className="mt-3 p-3 bg-purple-50 rounded-2xl border border-purple-100">
-                                              <p className="text-[9px] font-black text-purple-400 uppercase mb-1">Adicional</p>
-                                              <p className="text-xs font-bold text-purple-700">{rental.additionalService}</p>
-                                              <p className="text-sm font-black text-purple-600 mt-1">R$ {rental.additionalServiceValue?.toLocaleString('pt-BR')}</p>
-                                          </div>
-                                      )}
-                                  </div>
-
-                                  <div className="bg-slate-900 rounded-2xl p-4 flex justify-between items-center">
-                                      <div>
-                                          <p className="text-[8px] text-slate-500 font-black uppercase">Total</p>
-                                          <p className="text-xl font-black text-white">R$ {rental.totalValue.toLocaleString('pt-BR')}</p>
-                                      </div>
-                                      {pending > 0 && (
-                                          <div className="text-right">
-                                              <p className="text-[8px] text-yellow-500 font-black uppercase">Pendente</p>
-                                              <p className="text-lg font-black text-yellow-400">R$ {pending.toLocaleString('pt-BR')}</p>
-                                          </div>
-                                      )}
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-2">
-                                      <button onClick={() => handleSendWhatsApp(rental)} className="flex-1 bg-green-50 text-green-600 py-3 px-4 rounded-2xl font-bold text-xs uppercase hover:bg-green-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                          <MessageCircle size={14} /> WhatsApp
-                                      </button>
-                                      {rental.status !== RentalStatus.COMPLETED && rental.status !== RentalStatus.CANCELLED && (
-                                          <button onClick={() => handleCompleteEvent(rental)} className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all" title="Concluir">
-                                              <CheckCircle2 size={16}/>
-                                          </button>
-                                      )}
-                                      <button onClick={() => handleOpenModal(rental)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all" title="Editar">
-                                          <Edit3 size={16}/>
-                                      </button>
-                                      <button onClick={() => handleCopyLink(rental)} className="p-3 bg-purple-50 text-purple-600 rounded-2xl hover:bg-purple-600 hover:text-white transition-all" title="Compartilhar">
-                                          <Share2 size={16}/>
-                                      </button>
-                                      <button onClick={() => handleDeleteRental(rental.id)} className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all" title="Excluir">
-                                          <Trash2 size={16}/>
-                                      </button>
-                                  </div>
+                  return (
+                      <div key={rental.id} className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all group">
+                          <div className={'p-6 border-b ' + (
+                              rental.status === RentalStatus.COMPLETED ? 'bg-emerald-50 text-emerald-600' :
+                              rental.status === RentalStatus.CONFIRMED ? 'bg-blue-50 text-blue-600' :
+                              rental.status === RentalStatus.PENDING ? 'bg-yellow-50 text-yellow-600' :
+                              'bg-red-50 text-red-600'
+                          )}>
+                              <div className="flex justify-between items-center">
+                                  <span className="text-[10px] font-black uppercase tracking-widest">{rental.status}</span>
+                                  <span className="text-xs font-bold">#{rental.id.slice(-6).toUpperCase()}</span>
                               </div>
                           </div>
-                      );
-                  })
-              )}
-          </div>
-      )}
+
+                          <div className="p-6 space-y-6">
+                              <div>
+                                  <h3 className="text-xl font-black text-slate-800 mb-1">{rental.customerName}</h3>
+                                  <p className="text-xs text-slate-400 font-bold uppercase flex items-center gap-1"><MapPin size={12}/> {rental.eventAddress}</p>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                      <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1"><CalendarIcon size={10}/> Data</p>
+                                      <p className="font-bold text-slate-800">{new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1"><Clock size={10}/> Horário</p>
+                                      <p className="font-bold text-slate-800">{rental.startTime} - {rental.endTime}</p>
+                                  </div>
+                              </div>
+
+                              <div className="pt-4 border-t border-slate-50">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Itens Locados ({rentalToys.length})</p>
+                                  <div className="flex flex-wrap gap-2">
+                                      {rentalToys.slice(0, 3).map(toy => (
+                                          <span key={toy.id} className="px-3 py-1 bg-slate-50 text-slate-600 rounded-full text-[10px] font-bold">{toy.name}</span>
+                                      ))}
+                                      {rentalToys.length > 3 && <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold">+{rentalToys.length - 3}</span>}
+                                  </div>
+                                  {rental.additionalService && rental.additionalServiceValue && rental.additionalServiceValue > 0 && (
+                                      <div className="mt-3 p-3 bg-purple-50 rounded-2xl border border-purple-100">
+                                          <p className="text-[9px] font-black text-purple-400 uppercase mb-1">Adicional</p>
+                                          <p className="text-xs font-bold text-purple-700">{rental.additionalService}</p>
+                                          <p className="text-sm font-black text-purple-600 mt-1">R$ {rental.additionalServiceValue?.toLocaleString('pt-BR')}</p>
+                                      </div>
+                                  )}
+                              </div>
+
+                              <div className="bg-slate-900 rounded-2xl p-4 flex justify-between items-center">
+                                  <div>
+                                      <p className="text-[8px] text-slate-500 font-black uppercase">Total</p>
+                                      <p className="text-xl font-black text-white">R$ {rental.totalValue.toLocaleString('pt-BR')}</p>
+                                  </div>
+                                  {pending > 0 && (
+                                      <div className="text-right">
+                                          <p className="text-[8px] text-yellow-500 font-black uppercase">Pendente</p>
+                                          <p className="text-lg font-black text-yellow-400">R$ {pending.toLocaleString('pt-BR')}</p>
+                                      </div>
+                                  )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                  <button onClick={() => handleSendWhatsApp(rental)} className="flex-1 bg-green-50 text-green-600 py-3 px-4 rounded-2xl font-bold text-xs uppercase hover:bg-green-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                      <MessageCircle size={14} /> WhatsApp
+                                  </button>
+                                  {rental.status !== RentalStatus.COMPLETED && rental.status !== RentalStatus.CANCELLED && (
+                                      <button onClick={() => handleCompleteEvent(rental)} className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all" title="Concluir">
+                                          <CheckCircle2 size={16}/>
+                                      </button>
+                                  )}
+                                  <button onClick={() => handleOpenModal(rental)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all" title="Editar">
+                                      <Edit3 size={16}/>
+                                  </button>
+                                  <button onClick={() => handleCopyLink(rental)} className="p-3 bg-purple-50 text-purple-600 rounded-2xl hover:bg-purple-600 hover:text-white transition-all" title="Compartilhar">
+                                      <Share2 size={16}/>
+                                  </button>
+                                  <button onClick={() => handleDeleteRental(rental.id)} className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-600 hover:text-white transition-all" title="Excluir">
+                                      <Trash2 size={16}/>
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  );
+              })
+          )}
+      </div>
 
       {isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
