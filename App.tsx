@@ -119,15 +119,21 @@ const AppContent: React.FC = () => {
   const [staff, setStaff] = useState<User[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [company, setCompany] = useState<CompanyType | null>(null);
+  const [companyLoading, setCompanyLoading] = useState(true);
 
   useEffect(() => {
-    // Carrega dados da empresa mesmo deslogado para o Login
+    // ✅ CORREÇÃO: Registrar listener da empresa SEMPRE (antes de verificar user)
     const unsubCompany = onSnapshot(doc(db, "settings", "company"), (docSnap) => {
       if (docSnap.exists()) setCompany(docSnap.data() as CompanyType);
+      setCompanyLoading(false);
     });
 
-    if (!user) return;
+    // Se não houver usuário, retornar apenas o cleanup da empresa
+    if (!user) {
+      return () => { unsubCompany(); };
+    }
 
+    // Se houver usuário, registrar os demais listeners
     const unsubToys = onSnapshot(query(collection(db, "toys"), orderBy("name")), (snap) => setToys(snap.docs.map(d => ({ ...d.data(), id: d.id } as Toy))));
     const unsubCustomers = onSnapshot(query(collection(db, "customers"), orderBy("name")), (snap) => setCustomers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Customer))));
     const unsubRentals = onSnapshot(query(collection(db, "rentals"), orderBy("date", "desc")), (snap) => setRentals(snap.docs.map(d => ({ ...d.data(), id: d.id } as Rental))));
@@ -135,7 +141,16 @@ const AppContent: React.FC = () => {
     const unsubStaff = onSnapshot(collection(db, "users"), (snap) => setStaff(snap.docs.map(d => ({ ...d.data(), id: d.id } as User))));
     const unsubCategories = onSnapshot(doc(db, "settings", "categories"), (docSnap) => docSnap.exists() && setCategories(docSnap.data().list || []));
 
-    return () => { unsubToys(); unsubCustomers(); unsubRentals(); unsubFinancial(); unsubCompany(); unsubStaff(); unsubCategories(); };
+    // Cleanup de TODOS os listeners
+    return () => { 
+      unsubCompany();
+      unsubToys(); 
+      unsubCustomers(); 
+      unsubRentals(); 
+      unsubFinancial(); 
+      unsubStaff(); 
+      unsubCategories(); 
+    };
   }, [user]);
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -152,7 +167,7 @@ const AppContent: React.FC = () => {
     await setDoc(doc(db, "settings", "company"), updatedCompany);
   };
 
-  if (userLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
+  if (userLoading || companyLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
 
   const hasAccess = (pageId: string) => user?.role === UserRole.ADMIN || user?.allowedPages?.includes(pageId);
 
