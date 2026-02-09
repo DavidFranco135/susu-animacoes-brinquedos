@@ -24,7 +24,6 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
   const [searchTerm, setSearchTerm] = useState('');
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
-  const [compactView, setCompactView] = useState(false);
 
   const userStr = localStorage.getItem('susu_user');
   const user: User | null = userStr ? JSON.parse(userStr) : null;
@@ -577,29 +576,9 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
                   <button onClick={() => changeTime(1)} className="p-3 hover:bg-slate-50 rounded-2xl transition-all"><ChevronRight size={20} className="text-slate-400" /></button>
               </div>
           )}
-
-          {/* NOVO: Botão para alternar visualização */}
-          <div className="flex gap-2 bg-white p-2 rounded-3xl border shadow-sm ml-auto">
-              <button 
-                  onClick={() => setCompactView(false)} 
-                  className={'px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ' + (!compactView ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600')}
-              >
-                  <CalendarDays size={16} className="inline mr-2" />
-                  Cards
-              </button>
-              <button 
-                  onClick={() => setCompactView(true)} 
-                  className={'px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ' + (compactView ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600')}
-              >
-                  <ClipboardList size={16} className="inline mr-2" />
-                  Lista
-              </button>
-          </div>
       </div>
 
-      {/* VISUALIZAÇÃO EM CARDS (ORIGINAL) */}
-      {!compactView && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredRentals.length === 0 ? (
               <div className="col-span-full text-center py-20">
                   <CalendarDays size={64} className="mx-auto text-slate-200 mb-4" />
@@ -696,154 +675,7 @@ const Rentals: React.FC<RentalsProps> = ({ rentals, setRentals, customers, setCu
                   );
               })
           )}
-        </div>
-      )}
-
-      {/* NOVA VISUALIZAÇÃO EM LISTA COMPACTA */}
-      {compactView && (
-        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-          {filteredRentals.length === 0 ? (
-              <div className="text-center py-20">
-                  <CalendarDays size={64} className="mx-auto text-slate-200 mb-4" />
-                  <p className="text-slate-400 font-bold text-lg">Nenhum evento encontrado.</p>
-                  <p className="text-slate-400 text-sm mt-2">Ajuste os filtros ou busca para ver mais resultados.</p>
-              </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b-2 border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Horário</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Local</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Brinquedos</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Pendente</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredRentals.map(rental => {
-                    const rentalToys = toys.filter(t => rental.toyIds.includes(t.id));
-                    const pending = rental.totalValue - rental.entryValue;
-                    
-                    return (
-                      <tr key={rental.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className={'px-3 py-1 rounded-full text-[9px] font-black uppercase inline-block ' + (
-                            rental.status === RentalStatus.COMPLETED ? 'bg-emerald-100 text-emerald-700' :
-                            rental.status === RentalStatus.CONFIRMED ? 'bg-blue-100 text-blue-700' :
-                            rental.status === RentalStatus.PENDING ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          )}>
-                            {rental.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-sm text-slate-800 whitespace-nowrap">
-                            {new Date(rental.date + 'T00:00:00').toLocaleDateString('pt-BR')}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-xs text-slate-600 whitespace-nowrap flex items-center gap-1">
-                            <Clock size={12} className="text-slate-400" />
-                            {rental.startTime} - {rental.endTime}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-black text-sm text-slate-800">{rental.customerName}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-slate-600 font-medium max-w-[200px] truncate" title={rental.eventAddress}>
-                            <MapPin size={12} className="inline mr-1 text-slate-400" />
-                            {rental.eventAddress}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1 max-w-[250px]">
-                            {rentalToys.slice(0, 2).map(toy => (
-                              <span key={toy.id} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold">
-                                {toy.name}
-                              </span>
-                            ))}
-                            {rentalToys.length > 2 && (
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-[9px] font-bold">
-                                +{rentalToys.length - 2}
-                              </span>
-                            )}
-                          </div>
-                          {rental.additionalService && (
-                            <p className="text-[9px] text-purple-600 font-bold mt-1">
-                              + {rental.additionalService}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <p className="font-black text-sm text-slate-800">
-                            R$ {rental.totalValue.toLocaleString('pt-BR')}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {pending > 0 ? (
-                            <p className="font-black text-sm text-yellow-600">
-                              R$ {pending.toLocaleString('pt-BR')}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-emerald-600 font-bold">PAGO</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button 
-                              onClick={() => handleSendWhatsApp(rental)} 
-                              className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"
-                              title="WhatsApp"
-                            >
-                              <MessageCircle size={14} />
-                            </button>
-                            {rental.status !== RentalStatus.COMPLETED && rental.status !== RentalStatus.CANCELLED && (
-                              <button 
-                                onClick={() => handleCompleteEvent(rental)} 
-                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
-                                title="Concluir"
-                              >
-                                <CheckCircle2 size={14} />
-                              </button>
-                            )}
-                            <button 
-                              onClick={() => handleOpenModal(rental)} 
-                              className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
-                              title="Editar"
-                            >
-                              <Edit3 size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleCopyLink(rental)} 
-                              className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-600 hover:text-white transition-all"
-                              title="Compartilhar"
-                            >
-                              <Share2 size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteRental(rental.id)} 
-                              className="p-2 bg-red-50 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-all"
-                              title="Excluir"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      </div>
 
       {isModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
