@@ -194,65 +194,22 @@ Faça login com o email recuperado e a nova senha.`);
     }
   };
 
-  // ✅ FUNÇÃO CORRIGIDA: Agora faz upload no ImgBB antes de salvar
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
+  // Função genérica para processar imagem para Base64
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'profile' | 'login') => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tamanho (ImgBB tem limite de 32MB)
-    if (file.size > 32 * 1024 * 1024) {
-      alert('❌ Imagem muito grande! Máximo 32MB.');
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      // Converter arquivo para Base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      // Remover o prefixo "data:image/...;base64,"
-      const base64Data = base64.split(',')[1];
-
-      // Fazer upload no ImgBB
-      const formData = new FormData();
-      formData.append('image', base64Data);
-
-      const response = await fetch('https://api.imgbb.com/1/upload?key=f876a578e8922de48b2e4517f24cbac9', {
-        method: 'POST',
-        body: formData
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error('Falha no upload da imagem');
-      }
-
-      // Pegar a URL da imagem hospedada no ImgBB
-      const imageUrl = result.data.url;
-
-      // Atualizar o estado com a URL do ImgBB
-      if (type === 'logo') {
-        setCompanyData({ ...companyData, logoUrl: imageUrl });
-      } else if (type === 'login') {
-        setCompanyData({ ...companyData, loginBgUrl: imageUrl });
-      } else {
-        setUserData({ ...userData, profilePhotoUrl: imageUrl });
-      }
-
-      alert('✅ Imagem enviada com sucesso!');
-
-    } catch (error) {
-      console.error('Erro no upload:', error);
-      alert('❌ Erro ao enviar imagem. Tente novamente.');
-    } finally {
-      setIsSaving(false);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        if (type === 'logo') {
+          setCompanyData({ ...companyData, logoUrl: base64 });
+        } else if (type === 'login') {
+          setCompanyData({ ...companyData, loginBgUrl: base64 });
+        } else {
+          setUserData({ ...userData, profilePhotoUrl: base64 });
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
